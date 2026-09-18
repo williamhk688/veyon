@@ -1,11 +1,23 @@
-Veyon 4.11.2 (modified): modern dark UI + persistent Windows screen lock
+Veyon 4.11.2 (modified) — Windows 64-bit installer
+====================================================
 
-Use this installer:
-  veyon_4_11_2_win64_modified_setup.exe
+Download this file from GitHub:
 
-It is a 64-bit Windows NSIS setup of this fork with:
-- Dark/flat Qt theme for Master and Configurator
-- Screen lock that survives reboot until Master unlocks (HKLM)
+  installer/veyon_4_11_2_win64_modified_setup.exe
+
+Direct download (this branch):
+
+  https://github.com/williamhk688/veyon/raw/cursor/modern-ui-persistent-lock-ecca/installer/veyon_4_11_2_win64_modified_setup.exe
+
+Or open the file on GitHub and click "Download raw file":
+
+  https://github.com/williamhk688/veyon/blob/cursor/modern-ui-persistent-lock-ecca/installer/veyon_4_11_2_win64_modified_setup.exe
+
+SHA-256:
+  31db34ee2ea82495dcde82757c8f219a082ad0b642f05f244314c7ec08a498f5
+
+This is an unofficial MinGW cross-build of this fork (Qt 6.7.3),
+not an official Veyon Solutions installer. Test on one student PC first.
 
 Install
 -------
@@ -21,6 +33,3 @@ Install
 
 Both teacher and student machines MUST run this modified build.
 The persistent lock lives in the student Veyon Service.
-
-This is an unofficial MinGW cross-build (Qt 6.7.3). It is not the
-official Veyon Solutions installer. Test on one student PC first.
