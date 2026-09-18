@@ -25,7 +25,11 @@
 #include <windows.h>
 
 #include "WindowsServiceCore.h"
+#include "PlatformInputDeviceFunctions.h"
+#include "PlatformPluginInterface.h"
 #include "SasEventListener.h"
+#include "VeyonCore.h"
+#include "VeyonScreenLockRegistry.h"
 #include "WindowsCoreFunctions.h"
 #include "WindowsInputDeviceFunctions.h"
 #include "WindowsServerProcess.h"
@@ -94,6 +98,8 @@ void WindowsServiceCore::manageServerInstances()
 	m_serverShutdownEvent = CreateEvent( nullptr, false, false, L"Global\\SessionEventVeyon" );
 	ResetEvent( m_serverShutdownEvent );
 
+	startPersistedScreenLockWatch();
+
 	if( m_sessionManager.mode() != PlatformSessionManager::Mode::Local )
 	{
 		manageServersForAllSessions();
@@ -102,6 +108,8 @@ void WindowsServiceCore::manageServerInstances()
 	{
 		manageServerForConsoleSession();
 	}
+
+	stopPersistedScreenLockWatch();
 
 	CloseHandle( m_serverShutdownEvent );
 }
@@ -167,8 +175,7 @@ void WindowsServiceCore::manageServersForAllSessions()
 			}
 		}
 
-		std::array<HANDLE, 2> events{m_sessionChangeEvent, m_stopServiceEvent};
-		WaitForMultipleObjects(events.size(), events.data(), FALSE, SessionPollingInterval);
+		waitForServiceEvents();
 
 	} while (m_serviceStopRequested == 0);
 
@@ -234,8 +241,7 @@ void WindowsServiceCore::manageServerForConsoleSession()
 			oldWtsSessionId = wtsSessionId;
 		}
 
-		std::array<HANDLE, 2> events{m_sessionChangeEvent, m_stopServiceEvent};
-		WaitForMultipleObjects(events.size(), events.data(), FALSE, SessionPollingInterval);
+		waitForServiceEvents();
 
 	} while (m_serviceStopRequested == 0);
 
@@ -434,6 +440,131 @@ bool WindowsServiceCore::reportStatus( DWORD state, DWORD exitCode, DWORD waitHi
 	if( !( result = SetServiceStatus( m_statusHandle, &m_status ) ) )
 	{
 		vCritical() << "SetServiceStatus failed.";
+	}
+
+	return result;
+}
+
+
+
+bool WindowsServiceCore::persistedScreenLockIsSet()
+{
+	HKEY key = nullptr;
+	if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, VeyonScreenLockRegistryKey, 0,
+					  KEY_READ | KEY_WOW64_64KEY, &key) != ERROR_SUCCESS)
+	{
+		return false;
+	}
+
+	wchar_t buffer[128];
+	DWORD bufferSize = sizeof(buffer);
+	DWORD type = 0;
+	const auto status = RegQueryValueExW(key, VeyonScreenLockRegistryValue,
+										 nullptr, &type, reinterpret_cast<LPBYTE>(buffer), &bufferSize);
+	RegCloseKey(key);
+
+	return status == ERROR_SUCCESS && type == REG_SZ && bufferSize > sizeof(wchar_t);
+}
+
+
+
+void WindowsServiceCore::startPersistedScreenLockWatch()
+{
+	DWORD disposition = 0;
+	if (RegCreateKeyExW(HKEY_LOCAL_MACHINE, VeyonScreenLockRegistryKey, 0, nullptr,
+						REG_OPTION_NON_VOLATILE, KEY_NOTIFY | KEY_READ | KEY_WOW64_64KEY,
+						nullptr, &m_screenLockKey, &disposition) != ERROR_SUCCESS)
+	{
+		vWarning() << "failed to open HKLM screen-lock key for notification";
+		m_screenLockKey = nullptr;
+	}
+
+	m_screenLockNotifyEvent = CreateEvent(nullptr, FALSE, FALSE, nullptr);
+	armPersistedScreenLockWatch();
+	syncPersistedScreenLockInput();
+}
+
+
+
+void WindowsServiceCore::stopPersistedScreenLockWatch()
+{
+	if (m_screenLockNotifyEvent)
+	{
+		CloseHandle(m_screenLockNotifyEvent);
+		m_screenLockNotifyEvent = nullptr;
+	}
+
+	if (m_screenLockKey)
+	{
+		RegCloseKey(m_screenLockKey);
+		m_screenLockKey = nullptr;
+	}
+}
+
+
+
+void WindowsServiceCore::armPersistedScreenLockWatch()
+{
+	if (m_screenLockKey == nullptr || m_screenLockNotifyEvent == nullptr)
+	{
+		return;
+	}
+
+	if (RegNotifyChangeKeyValue(m_screenLockKey, FALSE, REG_NOTIFY_CHANGE_LAST_SET,
+								m_screenLockNotifyEvent, TRUE) != ERROR_SUCCESS)
+	{
+		vWarning() << "failed to arm HKLM screen-lock registry watch";
+	}
+}
+
+
+
+void WindowsServiceCore::syncPersistedScreenLockInput()
+{
+	const bool locked = persistedScreenLockIsSet();
+	if (locked == m_persistedInputLockApplied)
+	{
+		return;
+	}
+
+	m_persistedInputLockApplied = locked;
+
+	if (locked)
+	{
+		vInfo() << "applying persisted screen lock at Windows service";
+		VeyonCore::platform().inputDeviceFunctions().disableInputDevices();
+	}
+	else
+	{
+		vInfo() << "clearing persisted screen lock at Windows service";
+		VeyonCore::platform().inputDeviceFunctions().enableInputDevices();
+	}
+}
+
+
+
+DWORD WindowsServiceCore::waitForServiceEvents()
+{
+	HANDLE events[3];
+	DWORD eventCount = 2;
+	events[0] = m_sessionChangeEvent;
+	events[1] = m_stopServiceEvent;
+	if (m_screenLockNotifyEvent)
+	{
+		events[2] = m_screenLockNotifyEvent;
+		eventCount = 3;
+	}
+
+	const auto result = WaitForMultipleObjects(eventCount, events, FALSE, SessionPollingInterval);
+
+	if (result == WAIT_TIMEOUT ||
+		(m_screenLockNotifyEvent && result == WAIT_OBJECT_0 + 2))
+	{
+		syncPersistedScreenLockInput();
+		if (m_screenLockNotifyEvent && result == WAIT_OBJECT_0 + 2)
+		{
+			armPersistedScreenLockWatch();
+		}
 	}
 
 	return result;

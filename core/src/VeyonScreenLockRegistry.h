@@ -1,5 +1,5 @@
 /*
- * PersistentScreenLockState.h - persist teacher screen-lock in HKLM (Windows)
+ * VeyonScreenLockRegistry.h - HKLM location for Windows screen-lock persistence
  *
  * Copyright (c) 2026 Tobias Junghans <tobydox@veyon.io>
  *
@@ -24,31 +24,16 @@
 
 #pragma once
 
-#include "Feature.h"
-
 /*!
- * Windows 10/11 lock persistence for ScreenLock.
+ * Windows 10/11 registry location for a teacher screen-lock that must
+ * survive reboot.
  *
- * Production storage is HKLM (64-bit view):
- *   HKLM\SOFTWARE\Veyon Solutions\VeyonScreenLock
- *   REG_SZ LockedFeatureUid = "<uuid>"
- *
- * Sibling of Veyon's LocalStore key
+ * Sibling of Configuration::LocalStore
  *   HKLM\SOFTWARE\Veyon Solutions\Veyon
- * so Configurator flushes cannot wipe the lock flag.
+ * so Configurator flush/clear cannot wipe the lock flag.
  *
- * On non-Windows builds every method is a no-op unless
- * VEYON_SCREENLOCK_STATE_FILE is set (unit tests only).
+ * Open with KEY_WOW64_64KEY to match QSettings::Registry64Format.
  */
-class PersistentScreenLockState
-{
-public:
-	static Feature::Uid lockedFeatureUid();
-	static bool isLocked();
-	static bool setLocked(const Feature::Uid& featureUid);
-	static bool clear();
-
-private:
-	static Feature::Uid readLockedFeatureUid();
-	static bool writeLockedFeatureUid(const Feature::Uid& featureUid);
-};
+inline constexpr wchar_t VeyonScreenLockRegistryKey[] =
+	L"SOFTWARE\\Veyon Solutions\\VeyonScreenLock";
+inline constexpr wchar_t VeyonScreenLockRegistryValue[] = L"LockedFeatureUid";

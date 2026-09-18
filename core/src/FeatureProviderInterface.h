@@ -192,7 +192,7 @@ public:
 
 	/*!
 	 * \brief Called once the Veyon Server has started and FeatureWorkerManager is available.
-	 *        Used to restore persisted feature state (for example screen lock across reboot).
+	 *        ScreenLock uses this on Windows to restore a lock persisted in HKLM.
 	 */
 	virtual void initializeServer(VeyonServerInterface& server)
 	{

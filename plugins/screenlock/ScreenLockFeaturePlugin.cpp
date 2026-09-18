@@ -64,10 +64,17 @@ ScreenLockFeaturePlugin::ScreenLockFeaturePlugin( QObject* parent ) :
 	{
 		connect (VeyonCore::instance(), &VeyonCore::initialized,
 				 this, []() {
-			if (PersistentScreenLockState::isLocked() == false)
+#ifdef Q_OS_WIN
+			// Windows service (LocalSystem) starts before the user desktop.
+			// If HKLM still says locked, disable input at driver/HID level so
+			// the machine cannot be used until Master unlocks.
+			if (PersistentScreenLockState::isLocked())
 			{
-				VeyonCore::platform().inputDeviceFunctions().enableInputDevices();
+				VeyonCore::platform().inputDeviceFunctions().disableInputDevices();
+				return;
 			}
+#endif
+			VeyonCore::platform().inputDeviceFunctions().enableInputDevices();
 		});
 	}
 }
@@ -129,10 +136,13 @@ bool ScreenLockFeaturePlugin::handleFeatureMessage( VeyonServerInterface& server
 	{
 		if (message.command<FeatureCommand>() == FeatureCommand::StopLock)
 		{
+#ifdef Q_OS_WIN
 			if (PersistentScreenLockState::lockedFeatureUid() == message.featureUid())
 			{
 				PersistentScreenLockState::clear();
 			}
+			VeyonCore::platform().inputDeviceFunctions().enableInputDevices();
+#endif
 
 			if (server.featureWorkerManager().isWorkerRunning(message.featureUid()))
 			{
@@ -144,14 +154,19 @@ bool ScreenLockFeaturePlugin::handleFeatureMessage( VeyonServerInterface& server
 
 		if (message.command<FeatureCommand>() == FeatureCommand::StartLock)
 		{
+#ifdef Q_OS_WIN
 			PersistentScreenLockState::setLocked(message.featureUid());
+			VeyonCore::platform().inputDeviceFunctions().disableInputDevices();
+#endif
 		}
 
+#ifndef Q_OS_WIN
 		if( VeyonCore::platform().sessionFunctions().currentSessionHasUser() == false )
 		{
 			vDebug() << "not locking screen since not running in a user session";
 			return true;
 		}
+#endif
 
 		// forward message to worker
 		server.featureWorkerManager().sendMessageToManagedSystemWorker( message );
@@ -213,19 +228,29 @@ bool ScreenLockFeaturePlugin::isFeatureActive( VeyonServerInterface& server, Fea
 {
 	Q_UNUSED(server)
 
+#ifdef Q_OS_WIN
 	return PersistentScreenLockState::lockedFeatureUid() == featureUid;
+#else
+	Q_UNUSED(featureUid)
+	return false;
+#endif
 }
 
 
 
 void ScreenLockFeaturePlugin::initializeServer(VeyonServerInterface& server)
 {
+#ifdef Q_OS_WIN
 	m_server = &server;
 	restorePersistedLock();
+#else
+	Q_UNUSED(server)
+#endif
 }
 
 
 
+#ifdef Q_OS_WIN
 void ScreenLockFeaturePlugin::restorePersistedLock()
 {
 	if (m_server == nullptr)
@@ -239,18 +264,23 @@ void ScreenLockFeaturePlugin::restorePersistedLock()
 		return;
 	}
 
-	if (VeyonCore::platform().sessionFunctions().currentSessionHasUser() == false)
-	{
-		vDebug() << "persisted screen lock is set but no user session yet - retrying";
-		QTimer::singleShot(RestoreLockRetryInterval, this, &ScreenLockFeaturePlugin::restorePersistedLock);
-		return;
-	}
-
+	// Windows service starts veyon-server in the WTS session (via winlogon).
+	// Disable input immediately, then restore the overlay as soon as that
+	// session server is up, without waiting for an interactive user.
+	VeyonCore::platform().inputDeviceFunctions().disableInputDevices();
 	startLockWorker(*m_server, featureUid);
+
+	if (m_server->featureWorkerManager().isWorkerRunning(featureUid) == false)
+	{
+		vDebug() << "persisted screen lock worker not running yet - retrying";
+		QTimer::singleShot(RestoreLockRetryInterval, this, &ScreenLockFeaturePlugin::restorePersistedLock);
+	}
 }
+#endif
 
 
 
+#ifdef Q_OS_WIN
 void ScreenLockFeaturePlugin::startLockWorker(VeyonServerInterface& server, Feature::Uid featureUid)
 {
 	if (server.featureWorkerManager().isWorkerRunning(featureUid))
@@ -262,3 +292,4 @@ void ScreenLockFeaturePlugin::startLockWorker(VeyonServerInterface& server, Feat
 	server.featureWorkerManager().sendMessageToManagedSystemWorker(
 				FeatureMessage{featureUid, FeatureCommand::StartLock});
 }
+#endif

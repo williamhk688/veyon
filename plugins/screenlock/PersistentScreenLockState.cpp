@@ -1,5 +1,5 @@
 /*
- * PersistentScreenLockState.cpp - persist teacher screen-lock across reboot
+ * PersistentScreenLockState.cpp - persist teacher screen-lock in HKLM (Windows)
  *
  * Copyright (c) 2026 Tobias Junghans <tobydox@veyon.io>
  *
@@ -22,76 +22,33 @@
  *
  */
 
-#include <QCoreApplication>
-#include <QDir>
 #include <QFile>
-#include <QFileInfo>
-#include <QScopedPointer>
 #include <QSettings>
-#include <QTextStream>
 
 #include "PersistentScreenLockState.h"
-#include "PlatformFilesystemFunctions.h"
 #include "VeyonCore.h"
 
+#ifdef Q_OS_WIN
+#include <windows.h>
+#include "VeyonScreenLockRegistry.h"
+#endif
 
-static const auto SettingsApplicationName = QStringLiteral("VeyonScreenLock");
+
 static const auto LockedFeatureUidKey = QStringLiteral("LockedFeatureUid");
-static const auto StateFileName = QStringLiteral("screenlock.state");
 static const auto StateFileEnvVar = QByteArrayLiteral("VEYON_SCREENLOCK_STATE_FILE");
 
 
-static QSettings* createSystemSettings()
+static QString testStateFilePath()
 {
-	return new QSettings(
-#ifdef Q_OS_WIN
-				QSettings::Registry64Format,
-#else
-				QSettings::NativeFormat,
-#endif
-				QSettings::SystemScope,
-				QCoreApplication::organizationName(),
-				SettingsApplicationName);
+	return qEnvironmentVariable(StateFileEnvVar.constData());
 }
 
 
 
-QString PersistentScreenLockState::stateFilePath()
+static Feature::Uid readFromTestStateFile()
 {
-	const auto overridePath = qEnvironmentVariable(StateFileEnvVar.constData());
-	if (overridePath.isEmpty() == false)
-	{
-		return overridePath;
-	}
-
-	return VeyonCore::platform().filesystemFunctions().globalAppDataPath() +
-			QDir::separator() + StateFileName;
-}
-
-
-
-bool PersistentScreenLockState::useFileOnly()
-{
-	return qEnvironmentVariableIsSet(StateFileEnvVar.constData());
-}
-
-
-
-Feature::Uid PersistentScreenLockState::readFromSettings()
-{
-	QScopedPointer<QSettings> settings(createSystemSettings());
-	settings->setFallbacksEnabled(false);
-	const auto value = settings->value(LockedFeatureUidKey).toString();
-	const Feature::Uid uid{value};
-	return uid.isNull() ? Feature::Uid{} : uid;
-}
-
-
-
-Feature::Uid PersistentScreenLockState::readFromStateFile()
-{
-	const auto path = stateFilePath();
-	if (QFile::exists(path) == false)
+	const auto path = testStateFilePath();
+	if (path.isEmpty() || QFile::exists(path) == false)
 	{
 		return {};
 	}
@@ -104,98 +61,142 @@ Feature::Uid PersistentScreenLockState::readFromStateFile()
 
 
 
-bool PersistentScreenLockState::writeToSettings(const Feature::Uid& featureUid)
+static bool writeToTestStateFile(const Feature::Uid& featureUid)
 {
-	QScopedPointer<QSettings> settings(createSystemSettings());
-	settings->setFallbacksEnabled(false);
+	const auto path = testStateFilePath();
+	if (path.isEmpty())
+	{
+		return false;
+	}
+
 	if (featureUid.isNull())
 	{
-		settings->remove(LockedFeatureUidKey);
+		return QFile::exists(path) == false || QFile::remove(path);
+	}
+
+	QSettings settings(path, QSettings::IniFormat);
+	settings.setFallbacksEnabled(false);
+	settings.setValue(LockedFeatureUidKey, featureUid.toString(QUuid::WithoutBraces));
+	settings.sync();
+	return settings.status() == QSettings::NoError;
+}
+
+
+
+#ifdef Q_OS_WIN
+static Feature::Uid readFromRegistry()
+{
+	HKEY key = nullptr;
+	if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, VeyonScreenLockRegistryKey, 0,
+					  KEY_READ | KEY_WOW64_64KEY, &key) != ERROR_SUCCESS)
+	{
+		return {};
+	}
+
+	wchar_t buffer[128];
+	DWORD bufferSize = sizeof(buffer);
+	DWORD type = 0;
+	const auto status = RegQueryValueExW(key, VeyonScreenLockRegistryValue,
+										 nullptr, &type, reinterpret_cast<LPBYTE>(buffer), &bufferSize);
+	RegCloseKey(key);
+
+	if (status != ERROR_SUCCESS || type != REG_SZ || bufferSize < sizeof(wchar_t))
+	{
+		return {};
+	}
+
+	const auto chars = int(bufferSize / sizeof(wchar_t));
+	QString value = QString::fromWCharArray(buffer, chars);
+	if (value.endsWith(QLatin1Char('\0')))
+	{
+		value.chop(1);
+	}
+
+	const Feature::Uid uid{value};
+	return uid.isNull() ? Feature::Uid{} : uid;
+}
+
+
+
+static bool writeToRegistry(const Feature::Uid& featureUid)
+{
+	HKEY key = nullptr;
+	DWORD disposition = 0;
+	if (RegCreateKeyExW(HKEY_LOCAL_MACHINE, VeyonScreenLockRegistryKey, 0, nullptr,
+						REG_OPTION_NON_VOLATILE, KEY_WRITE | KEY_WOW64_64KEY,
+						nullptr, &key, &disposition) != ERROR_SUCCESS)
+	{
+		vWarning() << "failed to open HKLM screen-lock key";
+		return false;
+	}
+
+	LONG status = ERROR_SUCCESS;
+	if (featureUid.isNull())
+	{
+		status = RegDeleteValueW(key, VeyonScreenLockRegistryValue);
+		if (status == ERROR_FILE_NOT_FOUND)
+		{
+			status = ERROR_SUCCESS;
+		}
 	}
 	else
 	{
-		settings->setValue(LockedFeatureUidKey, featureUid.toString(QUuid::WithoutBraces));
+		const auto uidString = featureUid.toString(QUuid::WithoutBraces).toStdWString();
+		status = RegSetValueExW(key, VeyonScreenLockRegistryValue, 0, REG_SZ,
+								reinterpret_cast<const BYTE *>(uidString.c_str()),
+								DWORD((uidString.size() + 1) * sizeof(wchar_t)));
 	}
-	settings->sync();
 
-	if (settings->status() != QSettings::NoError)
+	RegCloseKey(key);
+
+	if (status != ERROR_SUCCESS)
 	{
-		vWarning() << "failed to persist screen lock in system settings, status" << settings->status();
+		vWarning() << "failed to update HKLM screen-lock value, status" << unsigned(status);
 		return false;
 	}
 
 	return true;
 }
+#endif
 
 
 
-bool PersistentScreenLockState::writeToStateFile(const Feature::Uid& featureUid)
+Feature::Uid PersistentScreenLockState::readLockedFeatureUid()
 {
-	const auto path = stateFilePath();
-	const auto directory = QFileInfo(path).absolutePath();
-	if (QDir().mkpath(directory) == false)
+	if (testStateFilePath().isEmpty() == false)
 	{
-		vWarning() << "failed to create screen lock state directory" << directory;
-		return false;
+		return readFromTestStateFile();
 	}
 
-	if (featureUid.isNull())
+#ifdef Q_OS_WIN
+	return readFromRegistry();
+#else
+	return {};
+#endif
+}
+
+
+
+bool PersistentScreenLockState::writeLockedFeatureUid(const Feature::Uid& featureUid)
+{
+	if (testStateFilePath().isEmpty() == false)
 	{
-		if (QFile::exists(path) && QFile::remove(path) == false)
-		{
-			vWarning() << "failed to remove screen lock state file" << path;
-			return false;
-		}
-		return true;
+		return writeToTestStateFile(featureUid);
 	}
 
-	QFile file(path);
-	const auto permissions = QFile::ReadOwner | QFile::WriteOwner | QFile::ReadGroup | QFile::ReadOther;
-	auto opened = false;
-
-	if (VeyonCore::instance())
-	{
-		opened = VeyonCore::platform().filesystemFunctions().openFileSafely(
-					&file, QFile::WriteOnly | QFile::Truncate | QFile::Text, permissions);
-	}
-
-	if (opened == false)
-	{
-		opened = file.open(QFile::WriteOnly | QFile::Truncate | QFile::Text);
-		if (opened)
-		{
-			file.setPermissions(permissions);
-		}
-	}
-
-	if (opened == false)
-	{
-		vWarning() << "failed to write screen lock state file" << path;
-		return false;
-	}
-
-	QTextStream stream(&file);
-	stream << QStringLiteral("[%1]\n%2=%3\n")
-			  .arg(QStringLiteral("General"), LockedFeatureUidKey, featureUid.toString(QUuid::WithoutBraces));
-	return stream.status() == QTextStream::Ok;
+#ifdef Q_OS_WIN
+	return writeToRegistry(featureUid);
+#else
+	Q_UNUSED(featureUid)
+	return false;
+#endif
 }
 
 
 
 Feature::Uid PersistentScreenLockState::lockedFeatureUid()
 {
-	const auto fromFile = readFromStateFile();
-	if (fromFile.isNull() == false)
-	{
-		return fromFile;
-	}
-
-	if (useFileOnly())
-	{
-		return {};
-	}
-
-	return readFromSettings();
+	return readLockedFeatureUid();
 }
 
 
@@ -214,34 +215,24 @@ bool PersistentScreenLockState::setLocked(const Feature::Uid& featureUid)
 		return clear();
 	}
 
-	auto ok = writeToStateFile(featureUid);
-	if (useFileOnly() == false)
+	if (writeLockedFeatureUid(featureUid) == false)
 	{
-		ok = writeToSettings(featureUid) || ok;
+		return false;
 	}
 
-	if (ok)
-	{
-		vInfo() << "persisted screen lock" << featureUid;
-	}
-
-	return ok;
+	vInfo() << "persisted screen lock" << featureUid;
+	return true;
 }
 
 
 
 bool PersistentScreenLockState::clear()
 {
-	auto ok = writeToStateFile({});
-	if (useFileOnly() == false)
+	if (writeLockedFeatureUid({}) == false)
 	{
-		ok = writeToSettings({}) && ok;
+		return false;
 	}
 
-	if (ok)
-	{
-		vInfo() << "cleared persisted screen lock";
-	}
-
-	return ok;
+	vInfo() << "cleared persisted screen lock";
+	return true;
 }

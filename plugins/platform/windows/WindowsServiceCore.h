@@ -44,6 +44,13 @@ public:
 	void manageServerInstances();
 
 private:
+	void startPersistedScreenLockWatch();
+	void stopPersistedScreenLockWatch();
+	void armPersistedScreenLockWatch();
+	void syncPersistedScreenLockInput();
+	DWORD waitForServiceEvents();
+	static bool persistedScreenLockIsSet();
+
 	void manageServersForAllSessions();
 	void manageServerForConsoleSession();
 
@@ -63,6 +70,9 @@ private:
 	HANDLE m_sessionChangeEvent{nullptr};
 	HANDLE m_stopServiceEvent{nullptr};
 	HANDLE m_serverShutdownEvent{nullptr};
+	HKEY m_screenLockKey{nullptr};
+	HANDLE m_screenLockNotifyEvent{nullptr};
+	bool m_persistedInputLockApplied{false};
 	QAtomicInt m_serviceStopRequested{0};
 	QAtomicInt m_sessionChanged{0};
 

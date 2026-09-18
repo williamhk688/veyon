@@ -4,6 +4,9 @@
  * Copyright (c) 2026 Tobias Junghans <tobydox@veyon.io>
  *
  * This file is part of Veyon - https://veyon.io
+ *
+ * Production persistence is HKLM (Windows). These tests force the
+ * VEYON_SCREENLOCK_STATE_FILE override so they never touch the registry.
  */
 
 #include <QtTest>

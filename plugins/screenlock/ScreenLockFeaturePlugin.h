@@ -93,16 +93,20 @@ private:
 		StopLock
 	};
 
+#ifdef Q_OS_WIN
 	void restorePersistedLock();
 	void startLockWorker(VeyonServerInterface& server, Feature::Uid featureUid);
 
 	static constexpr auto RestoreLockRetryInterval = 2000;
+#endif
 
 	const Feature m_screenLockFeature;
 	const Feature m_lockInputDevicesFeature;
 	const FeatureList m_features;
 
 	LockWidget* m_lockWidget;
+#ifdef Q_OS_WIN
 	VeyonServerInterface* m_server = nullptr;
+#endif
 
 };
