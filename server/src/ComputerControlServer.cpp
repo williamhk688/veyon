@@ -87,6 +87,8 @@ bool ComputerControlServer::start()
 	m_vncServer.prepare();
 	m_vncServer.start();
 
+	VeyonCore::featureManager().initializeServer(*this);
+
 	return true;
 }
 

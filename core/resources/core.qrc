@@ -46,5 +46,7 @@
     <file>toast-warning.png</file>
     <file>view-fullscreen.png</file>
     <file>view-fullscreen-dark.png</file>
+    <file>veyon-modern-dark.qss</file>
+    <file>veyon-modern-light.qss</file>
   </qresource>
 </RCC>

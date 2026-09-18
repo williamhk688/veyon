@@ -28,10 +28,12 @@
 #include <QAction>
 #include <QApplication>
 #include <QDir>
+#include <QFile>
 #include <QGroupBox>
 #include <QJsonDocument>
 #include <QLabel>
 #include <QLibraryInfo>
+#include <QPalette>
 #include <QProcessEnvironment>
 #include <QRegularExpression>
 #include <QStyleFactory>
@@ -610,17 +612,7 @@ void VeyonCore::initUi()
 			app->setStyle(QStyleFactory::create(QStringLiteral("Fusion")));
 		}
 
-		app->setStyleSheet(QStringLiteral(
-							   "QToolButton:checked {background-color:#88ddff;}"
-							   "QToolTip {padding:5px; border:0px;}"
-							   ));
-
-		auto toolTipPalette = QToolTip::palette();
-		static const char* toolTipBackgroundColor = "#198cb3";
-		toolTipPalette.setColor(QPalette::Window, toolTipBackgroundColor);
-		toolTipPalette.setColor(QPalette::ToolTipBase, toolTipBackgroundColor);
-		toolTipPalette.setColor(QPalette::ToolTipText, Qt::white);
-		QToolTip::setPalette(toolTipPalette);
+		const auto darkMode = useDarkMode();
 
 #if QT_VERSION >= QT_VERSION_CHECK(6, 8, 0)
 		switch (config().uiColorScheme())
@@ -635,6 +627,50 @@ void VeyonCore::initUi()
 			break;
 		}
 #endif
+
+		if (darkMode)
+		{
+			QPalette palette;
+			palette.setColor(QPalette::Window, QColor(0x20, 0x20, 0x20));
+			palette.setColor(QPalette::WindowText, QColor(0xf3, 0xf3, 0xf3));
+			palette.setColor(QPalette::Base, QColor(0x1a, 0x1a, 0x1a));
+			palette.setColor(QPalette::AlternateBase, QColor(0x22, 0x22, 0x22));
+			palette.setColor(QPalette::ToolTipBase, QColor(0x19, 0x8c, 0xb3));
+			palette.setColor(QPalette::ToolTipText, Qt::white);
+			palette.setColor(QPalette::Text, QColor(0xf3, 0xf3, 0xf3));
+			palette.setColor(QPalette::Button, QColor(0x3a, 0x3a, 0x3a));
+			palette.setColor(QPalette::ButtonText, QColor(0xf3, 0xf3, 0xf3));
+			palette.setColor(QPalette::BrightText, Qt::white);
+			palette.setColor(QPalette::Highlight, QColor(0x19, 0x8c, 0xb3));
+			palette.setColor(QPalette::HighlightedText, Qt::white);
+			palette.setColor(QPalette::Link, QColor(0x1f, 0xa3, 0xce));
+			palette.setColor(QPalette::PlaceholderText, QColor(0x80, 0x80, 0x80));
+			app->setPalette(palette);
+		}
+
+		// Inject the modern flat QSS for Master, Configurator, Worker, and CLI GUIs.
+		const auto styleSheetPath = darkMode ? QStringLiteral(":/core/veyon-modern-dark.qss")
+											 : QStringLiteral(":/core/veyon-modern-light.qss");
+		QFile styleSheetFile(styleSheetPath);
+		if (styleSheetFile.open(QFile::ReadOnly | QFile::Text))
+		{
+			app->setStyleSheet(QString::fromUtf8(styleSheetFile.readAll()));
+		}
+		else
+		{
+			vWarning() << "failed to load UI stylesheet" << styleSheetPath;
+			app->setStyleSheet(QStringLiteral(
+								   "QToolButton:checked {background-color:#88ddff;}"
+								   "QToolTip {padding:5px; border:0px;}"
+								   ));
+		}
+
+		auto toolTipPalette = QToolTip::palette();
+		static const char* toolTipBackgroundColor = "#198cb3";
+		toolTipPalette.setColor(QPalette::Window, toolTipBackgroundColor);
+		toolTipPalette.setColor(QPalette::ToolTipBase, toolTipBackgroundColor);
+		toolTipPalette.setColor(QPalette::ToolTipText, Qt::white);
+		QToolTip::setPalette(toolTipPalette);
 	}
 }
 

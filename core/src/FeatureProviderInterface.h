@@ -190,6 +190,15 @@ public:
 		return false;
 	}
 
+	/*!
+	 * \brief Called once the Veyon Server has started and FeatureWorkerManager is available.
+	 *        Used to restore persisted feature state (for example screen lock across reboot).
+	 */
+	virtual void initializeServer(VeyonServerInterface& server)
+	{
+		Q_UNUSED(server)
+	}
+
 protected:
 	void sendFeatureMessage(const FeatureMessage& message, const ComputerControlInterfaceList& computerControlInterfaces)
 	{

@@ -80,6 +80,8 @@ public:
 
 	void sendAsyncFeatureMessages(VeyonServerInterface& server, const MessageContext& messageContext) const;
 
+	void initializeServer(VeyonServerInterface& server) const;
+
 	FeatureUidList activeFeatures( VeyonServerInterface& server ) const;
 
 private:

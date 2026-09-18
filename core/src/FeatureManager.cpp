@@ -285,6 +285,16 @@ void FeatureManager::sendAsyncFeatureMessages(VeyonServerInterface& server,
 
 
 
+void FeatureManager::initializeServer(VeyonServerInterface& server) const
+{
+	for (const auto& featureInterface : std::as_const(m_featurePluginInterfaces))
+	{
+		featureInterface->initializeServer(server);
+	}
+}
+
+
+
 FeatureUidList FeatureManager::activeFeatures( VeyonServerInterface& server ) const
 {
 	FeatureUidList features;

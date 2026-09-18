@@ -27,6 +27,7 @@
 #include "FeatureProviderInterface.h"
 
 class LockWidget;
+class VeyonServerInterface;
 
 class ScreenLockFeaturePlugin : public QObject, FeatureProviderInterface, PluginInterface
 {
@@ -44,7 +45,7 @@ public:
 
 	QVersionNumber version() const override
 	{
-		return QVersionNumber( 1, 1 );
+		return QVersionNumber( 1, 2 );
 	}
 
 	QString name() const override
@@ -81,6 +82,10 @@ public:
 
 	bool handleFeatureMessage( VeyonWorkerInterface& worker, const FeatureMessage& message ) override;
 
+	bool isFeatureActive( VeyonServerInterface& server, Feature::Uid featureUid ) const override;
+
+	void initializeServer(VeyonServerInterface& server) override;
+
 private:
 	enum class FeatureCommand
 	{
@@ -88,10 +93,16 @@ private:
 		StopLock
 	};
 
+	void restorePersistedLock();
+	void startLockWorker(VeyonServerInterface& server, Feature::Uid featureUid);
+
+	static constexpr auto RestoreLockRetryInterval = 2000;
+
 	const Feature m_screenLockFeature;
 	const Feature m_lockInputDevicesFeature;
 	const FeatureList m_features;
 
 	LockWidget* m_lockWidget;
+	VeyonServerInterface* m_server = nullptr;
 
 };

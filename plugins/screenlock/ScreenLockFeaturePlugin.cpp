@@ -23,11 +23,13 @@
  */
 
 #include <QCoreApplication>
+#include <QTimer>
 
 #include "ScreenLockFeaturePlugin.h"
 #include "ComputerControlInterface.h"
 #include "FeatureWorkerManager.h"
 #include "LockWidget.h"
+#include "PersistentScreenLockState.h"
 #include "PlatformCoreFunctions.h"
 #include "PlatformInputDeviceFunctions.h"
 #include "PlatformSessionFunctions.h"
@@ -62,7 +64,10 @@ ScreenLockFeaturePlugin::ScreenLockFeaturePlugin( QObject* parent ) :
 	{
 		connect (VeyonCore::instance(), &VeyonCore::initialized,
 				 this, []() {
-			VeyonCore::platform().inputDeviceFunctions().enableInputDevices();
+			if (PersistentScreenLockState::isLocked() == false)
+			{
+				VeyonCore::platform().inputDeviceFunctions().enableInputDevices();
+			}
 		});
 	}
 }
@@ -124,10 +129,22 @@ bool ScreenLockFeaturePlugin::handleFeatureMessage( VeyonServerInterface& server
 	{
 		if (message.command<FeatureCommand>() == FeatureCommand::StopLock)
 		{
+			if (PersistentScreenLockState::lockedFeatureUid() == message.featureUid())
+			{
+				PersistentScreenLockState::clear();
+			}
+
 			if (server.featureWorkerManager().isWorkerRunning(message.featureUid()))
+			{
 				server.featureWorkerManager().sendMessageToManagedSystemWorker(message);
+			}
 
 			return true;
+		}
+
+		if (message.command<FeatureCommand>() == FeatureCommand::StartLock)
+		{
+			PersistentScreenLockState::setLocked(message.featureUid());
 		}
 
 		if( VeyonCore::platform().sessionFunctions().currentSessionHasUser() == false )
@@ -188,4 +205,60 @@ bool ScreenLockFeaturePlugin::handleFeatureMessage( VeyonWorkerInterface& worker
 	}
 
 	return false;
+}
+
+
+
+bool ScreenLockFeaturePlugin::isFeatureActive( VeyonServerInterface& server, Feature::Uid featureUid ) const
+{
+	Q_UNUSED(server)
+
+	return PersistentScreenLockState::lockedFeatureUid() == featureUid;
+}
+
+
+
+void ScreenLockFeaturePlugin::initializeServer(VeyonServerInterface& server)
+{
+	m_server = &server;
+	restorePersistedLock();
+}
+
+
+
+void ScreenLockFeaturePlugin::restorePersistedLock()
+{
+	if (m_server == nullptr)
+	{
+		return;
+	}
+
+	const auto featureUid = PersistentScreenLockState::lockedFeatureUid();
+	if (featureUid.isNull())
+	{
+		return;
+	}
+
+	if (VeyonCore::platform().sessionFunctions().currentSessionHasUser() == false)
+	{
+		vDebug() << "persisted screen lock is set but no user session yet - retrying";
+		QTimer::singleShot(RestoreLockRetryInterval, this, &ScreenLockFeaturePlugin::restorePersistedLock);
+		return;
+	}
+
+	startLockWorker(*m_server, featureUid);
+}
+
+
+
+void ScreenLockFeaturePlugin::startLockWorker(VeyonServerInterface& server, Feature::Uid featureUid)
+{
+	if (server.featureWorkerManager().isWorkerRunning(featureUid))
+	{
+		return;
+	}
+
+	vInfo() << "restoring persisted screen lock" << featureUid;
+	server.featureWorkerManager().sendMessageToManagedSystemWorker(
+				FeatureMessage{featureUid, FeatureCommand::StartLock});
 }
