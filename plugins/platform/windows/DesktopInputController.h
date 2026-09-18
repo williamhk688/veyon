@@ -25,7 +25,9 @@
 #pragma once
 
 #include <thread>
+#include <windows.h>
 
+#include <QObject>
 #include <QMutex>
 #include <QQueue>
 #include <QWaitCondition>

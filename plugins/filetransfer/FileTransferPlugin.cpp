@@ -22,7 +22,7 @@
  *
  */
 
-#include <QCoreApplication>
+#include <QApplication>
 #include <QDesktopServices>
 #include <QFileDialog>
 #include <QFileInfo>

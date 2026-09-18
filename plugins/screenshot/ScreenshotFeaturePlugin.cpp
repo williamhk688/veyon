@@ -22,7 +22,9 @@
  *
  */
 
+#include <QEventLoop>
 #include <QMessageBox>
+#include <QTimer>
 
 #include "ScreenshotFeaturePlugin.h"
 #include "ComputerControlInterface.h"

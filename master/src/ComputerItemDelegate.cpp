@@ -23,6 +23,8 @@
  */
 
 #include <QPainter>
+#include <QStyle>
+#include <QWidget>
 
 #include "ComputerControlListModel.h"
 #include "ComputerItemDelegate.h"
@@ -53,7 +55,11 @@ void ComputerItemDelegate::paint(QPainter* painter, const QStyleOptionViewItem& 
 QSize ComputerItemDelegate::sizeHint(const QStyleOptionViewItem& option, const QModelIndex& index) const
 {
 	QStyleOptionViewItem opt = option;
-	const auto style = QApplication::style();
+	const QStyle* style = option.widget ? option.widget->style() : nullptr;
+	if (style == nullptr)
+	{
+		return QStyledItemDelegate::sizeHint(option, index);
+	}
 
 	if (index.model())
 	{
