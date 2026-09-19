@@ -22,6 +22,8 @@
  *
  */
 
+#include <QColor>
+
 #include "ComputerControlListModel.h"
 #include "ComputerManager.h"
 #include "ComputerMonitoringView.h"
@@ -29,6 +31,7 @@
 #include "VeyonMaster.h"
 #include "FeatureManager.h"
 #include "VeyonConfiguration.h"
+#include "VeyonCore.h"
 #include "UserConfig.h"
 
 
@@ -54,8 +57,22 @@ void ComputerMonitoringView::initializeView( QObject* self )
 	QObject::connect( &m_master->computerControlListModel(), &ComputerControlListModel::computerScreenSizeChanged, self,
 					  [this]() { setIconSize( m_master->computerControlListModel().computerScreenSize() ); } );
 
-	setColors( VeyonCore::config().computerMonitoringBackgroundColor(),
-			   VeyonCore::config().computerMonitoringTextColor() );
+	auto backgroundColor = VeyonCore::config().computerMonitoringBackgroundColor();
+	auto textColor = VeyonCore::config().computerMonitoringTextColor();
+	if (backgroundColor == QColor(Qt::white) && textColor == QColor(Qt::black))
+	{
+		if (VeyonCore::useDarkMode())
+		{
+			backgroundColor = QColor(0x0b, 0x10, 0x20);
+			textColor = QColor(0xe8, 0xee, 0xf8);
+		}
+		else
+		{
+			backgroundColor = QColor(0xf1, 0xf5, 0xf9);
+			textColor = QColor(0x0f, 0x17, 0x2a);
+		}
+	}
+	setColors( backgroundColor, textColor );
 
 	setComputerScreenSize( m_master->userConfig().monitoringScreenSize() );
 

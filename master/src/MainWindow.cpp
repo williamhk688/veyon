@@ -133,8 +133,8 @@ MainWindow::MainWindow( VeyonMaster &masterCore, QWidget* parent ) :
 	QList<int> splitterSizes;
 	for( auto* splitter : { slideshowSpotlightSplitter, monitoringSplitter, mainSplitter } )
 	{
-		splitter->setHandleWidth( 7 );
-		splitter->setStyleSheet( QStringLiteral("QSplitter::handle:hover{background-color:#198cb3;}") );
+		splitter->setHandleWidth( 8 );
+		splitter->setStyleSheet( QStringLiteral("QSplitter::handle:hover{background-color:#22d3ee;}") );
 
 		splitter->installEventFilter( this );
 
@@ -266,7 +266,7 @@ MainWindow::MainWindow( VeyonMaster &masterCore, QWidget* parent ) :
 	}
 
 	// create the main toolbar
-	ui->toolBar->layout()->setSpacing( 2 );
+	ui->toolBar->layout()->setSpacing( 8 );
 	ui->toolBar->toggleViewAction()->setEnabled( false );
 
 	addToolBar( Qt::TopToolBarArea, ui->toolBar );

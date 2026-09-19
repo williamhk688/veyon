@@ -193,16 +193,8 @@ void ComputerMonitoringWidget::setIconSize( const QSize& size )
 void ComputerMonitoringWidget::setColors( const QColor& backgroundColor, const QColor& textColor )
 {
 	auto pal = palette();
-	if (VeyonCore::useDarkMode())
-	{
-		pal.setColor(QPalette::Base, textColor);
-		pal.setColor(QPalette::Text, backgroundColor);
-	}
-	else
-	{
-		pal.setColor(QPalette::Base, backgroundColor);
-		pal.setColor(QPalette::Text, textColor);
-	}
+	pal.setColor(QPalette::Base, backgroundColor);
+	pal.setColor(QPalette::Text, textColor);
 	setPalette( pal );
 }
 

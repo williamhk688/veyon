@@ -24,6 +24,8 @@
 
 #pragma once
 
+#include <QColor>
+#include <QPixmap>
 #include <QPixmapCache>
 #include <QStyledItemDelegate>
 
@@ -42,11 +44,16 @@ public:
 private:
 	void initFeaturePixmaps();
 	void drawFeatureIcons(QPainter* painter, const QPoint& pos, ComputerControlInterface::Pointer controlInterface) const;
+	QPixmap decorationPixmap(const QModelIndex& index, const QSize& size) const;
+	QColor statusColor(const ComputerControlInterface::Pointer& controlInterface) const;
 
-	static constexpr int OverlayIconSize = 32;
+	static constexpr int CardPadding = 8;
+	static constexpr int CardRadius = 14;
+	static constexpr int CaptionHeight = 32;
+	static constexpr int OverlayIconSize = 24;
 	static constexpr int OverlayIconSpacing = 4;
 	static constexpr int OverlayIconsPadding = 8;
-	static constexpr int OverlayIconsRadius = 6;
+	static constexpr int OverlayIconsRadius = 10;
 
 	QMap<QUuid, QPixmap> m_featurePixmaps;
 

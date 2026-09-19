@@ -628,25 +628,45 @@ void VeyonCore::initUi()
 		}
 #endif
 
+		QPalette palette;
 		if (darkMode)
 		{
-			QPalette palette;
-			palette.setColor(QPalette::Window, QColor(0x20, 0x20, 0x20));
-			palette.setColor(QPalette::WindowText, QColor(0xf3, 0xf3, 0xf3));
-			palette.setColor(QPalette::Base, QColor(0x1a, 0x1a, 0x1a));
-			palette.setColor(QPalette::AlternateBase, QColor(0x22, 0x22, 0x22));
-			palette.setColor(QPalette::ToolTipBase, QColor(0x19, 0x8c, 0xb3));
+			palette.setColor(QPalette::Window, QColor(0x0b, 0x10, 0x20));
+			palette.setColor(QPalette::WindowText, QColor(0xe8, 0xee, 0xf8));
+			palette.setColor(QPalette::Base, QColor(0x0f, 0x17, 0x2a));
+			palette.setColor(QPalette::AlternateBase, QColor(0x14, 0x1b, 0x2d));
+			palette.setColor(QPalette::ToolTipBase, QColor(0x08, 0x91, 0xb2));
 			palette.setColor(QPalette::ToolTipText, Qt::white);
-			palette.setColor(QPalette::Text, QColor(0xf3, 0xf3, 0xf3));
-			palette.setColor(QPalette::Button, QColor(0x3a, 0x3a, 0x3a));
-			palette.setColor(QPalette::ButtonText, QColor(0xf3, 0xf3, 0xf3));
+			palette.setColor(QPalette::Text, QColor(0xe8, 0xee, 0xf8));
+			palette.setColor(QPalette::Button, QColor(0x1c, 0x27, 0x40));
+			palette.setColor(QPalette::ButtonText, QColor(0xe8, 0xee, 0xf8));
 			palette.setColor(QPalette::BrightText, Qt::white);
-			palette.setColor(QPalette::Highlight, QColor(0x19, 0x8c, 0xb3));
+			palette.setColor(QPalette::Highlight, QColor(0x08, 0x91, 0xb2));
 			palette.setColor(QPalette::HighlightedText, Qt::white);
-			palette.setColor(QPalette::Link, QColor(0x1f, 0xa3, 0xce));
-			palette.setColor(QPalette::PlaceholderText, QColor(0x80, 0x80, 0x80));
-			app->setPalette(palette);
+			palette.setColor(QPalette::Link, QColor(0x22, 0xd3, 0xee));
+			palette.setColor(QPalette::PlaceholderText, QColor(0x64, 0x74, 0x8b));
+			palette.setColor(QPalette::Light, QColor(0x24, 0x30, 0x49));
+			palette.setColor(QPalette::Mid, QColor(0x2a, 0x35, 0x50));
+			palette.setColor(QPalette::Dark, QColor(0x10, 0x18, 0x2b));
 		}
+		else
+		{
+			palette.setColor(QPalette::Window, QColor(0xf1, 0xf5, 0xf9));
+			palette.setColor(QPalette::WindowText, QColor(0x0f, 0x17, 0x2a));
+			palette.setColor(QPalette::Base, QColor(0xff, 0xff, 0xff));
+			palette.setColor(QPalette::AlternateBase, QColor(0xf8, 0xfa, 0xfc));
+			palette.setColor(QPalette::ToolTipBase, QColor(0x08, 0x91, 0xb2));
+			palette.setColor(QPalette::ToolTipText, Qt::white);
+			palette.setColor(QPalette::Text, QColor(0x0f, 0x17, 0x2a));
+			palette.setColor(QPalette::Button, QColor(0xff, 0xff, 0xff));
+			palette.setColor(QPalette::ButtonText, QColor(0x0f, 0x17, 0x2a));
+			palette.setColor(QPalette::BrightText, Qt::white);
+			palette.setColor(QPalette::Highlight, QColor(0x08, 0x91, 0xb2));
+			palette.setColor(QPalette::HighlightedText, Qt::white);
+			palette.setColor(QPalette::Link, QColor(0x0e, 0x74, 0x90));
+			palette.setColor(QPalette::PlaceholderText, QColor(0x94, 0xa3, 0xb8));
+		}
+		app->setPalette(palette);
 
 		// Inject the modern flat QSS for Master, Configurator, Worker, and CLI GUIs.
 		const auto styleSheetPath = darkMode ? QStringLiteral(":/core/veyon-modern-dark.qss")
@@ -666,9 +686,9 @@ void VeyonCore::initUi()
 		}
 
 		auto toolTipPalette = QToolTip::palette();
-		static const char* toolTipBackgroundColor = "#198cb3";
-		toolTipPalette.setColor(QPalette::Window, toolTipBackgroundColor);
-		toolTipPalette.setColor(QPalette::ToolTipBase, toolTipBackgroundColor);
+		static const char* toolTipBackgroundColor = "#0891b2";
+		toolTipPalette.setColor(QPalette::Window, QColor(toolTipBackgroundColor));
+		toolTipPalette.setColor(QPalette::ToolTipBase, QColor(toolTipBackgroundColor));
 		toolTipPalette.setColor(QPalette::ToolTipText, Qt::white);
 		QToolTip::setPalette(toolTipPalette);
 	}

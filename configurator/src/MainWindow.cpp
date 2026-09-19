@@ -55,6 +55,10 @@ MainWindow::MainWindow( QWidget* parent ) :
 
 	setWindowTitle(tr("Veyon Configurator %1").arg(VeyonCore::versionString()));
 
+	ui->pageSelector->setMinimumWidth(220);
+	ui->pageSelector->setSpacing(6);
+	ui->configuratorSidebar->setMinimumWidth(228);
+
 	loadConfigurationPagePlugins();
 
 	// reset all widget's values to current configuration
@@ -361,9 +365,10 @@ void MainWindow::loadConfigurationPagePlugins()
 		}
 	}
 
-	// adjust minimum size
-	ui->pageSelector->setMinimumSize( ui->pageSelector->sizeHintForColumn(0) + 3 * ui->pageSelector->spacing(),
-									  ui->pageSelector->minimumHeight() );
+	// adjust minimum size for the navigation rail
+	const auto selectorWidth = qMax(220, ui->pageSelector->sizeHintForColumn(0) + 3 * ui->pageSelector->spacing());
+	ui->pageSelector->setMinimumSize( selectorWidth, ui->pageSelector->minimumHeight() );
+	ui->configuratorSidebar->setMinimumWidth( selectorWidth + 8 );
 }
 
 
