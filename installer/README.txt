@@ -39,3 +39,14 @@ Install
 
 Both teacher and student machines MUST run this modified build.
 The persistent lock and demo live in the student Veyon Service.
+
+Teacher Safe Mode recovery guide
+--------------------------------
+Direct download:
+
+  https://github.com/williamhk688/veyon/raw/cursor/modern-ui-persistent-lock-ecca/installer/teacher-lock-recovery.docx
+
+Same file, Chinese filename:
+
+  installer/老師專用-鎖定自救說明.docx
+
