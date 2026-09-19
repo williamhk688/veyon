@@ -1,5 +1,5 @@
 /*
- * VeyonScreenLockRegistry.h - HKLM location for Windows screen-lock persistence
+ * VeyonDemoRegistry.h - HKLM location for Windows demo persistence
  *
  * Copyright (c) 2026 Tobias Junghans <tobydox@veyon.io>
  *
@@ -25,17 +25,19 @@
 #pragma once
 
 /*!
- * Windows 10/11 registry location for a teacher screen-lock that must
- * survive reboot.
+ * Windows 10/11 registry location for a teacher demo that must survive reboot.
  *
  * Sibling of Configuration::LocalStore
  *   HKLM\SOFTWARE\Veyon Solutions\Veyon
- * so Configurator flush/clear cannot wipe the lock flag.
+ * so Configurator flush/clear cannot wipe the demo flag.
  *
  * Open with KEY_WOW64_64KEY to match QSettings::Registry64Format.
  */
-inline constexpr wchar_t VeyonSolutionsRegistryKey[] =
-	L"SOFTWARE\\Veyon Solutions";
-inline constexpr wchar_t VeyonScreenLockRegistryKey[] =
-	L"SOFTWARE\\Veyon Solutions\\VeyonScreenLock";
-inline constexpr wchar_t VeyonScreenLockRegistryValue[] = L"LockedFeatureUid";
+inline constexpr wchar_t VeyonDemoRegistryKey[] =
+	L"SOFTWARE\\Veyon Solutions\\VeyonDemo";
+inline constexpr wchar_t VeyonDemoFeatureUidValue[] = L"FeatureUid";
+inline constexpr wchar_t VeyonDemoServerHostValue[] = L"DemoServerHost";
+inline constexpr wchar_t VeyonDemoServerPortValue[] = L"DemoServerPort";
+inline constexpr wchar_t VeyonDemoAccessTokenValue[] = L"DemoAccessToken";
+inline constexpr wchar_t VeyonDemoViewportValue[] = L"Viewport";
+inline constexpr wchar_t VeyonDemoLockInputValue[] = L"LockInput";

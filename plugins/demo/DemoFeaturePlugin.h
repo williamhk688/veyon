@@ -68,7 +68,7 @@ public:
 
 	QVersionNumber version() const override
 	{
-		return QVersionNumber( 1, 1 );
+		return QVersionNumber( 1, 2 );
 	}
 
 	QString name() const override
@@ -115,6 +115,8 @@ public:
 
 	bool isFeatureActive(VeyonServerInterface& server, Feature::Uid featureUid) const override;
 
+	void initializeServer(VeyonServerInterface& server) override;
+
 	ConfigurationPage* createConfigurationPage() override;
 
 private:
@@ -131,6 +133,13 @@ private:
 	void controlDemoServer();
 	bool controlDemoClient( Feature::Uid featureUid, Operation operation, const QVariantMap& arguments,
 						   const ComputerControlInterfaceList& computerControlInterfaces );
+
+#ifdef Q_OS_WIN
+	void restorePersistedDemo();
+	void startPersistedDemoWorker();
+
+	static constexpr auto RestoreDemoRetryInterval = 2000;
+#endif
 
 	enum class FeatureCommand {
 		StartDemoServer,
@@ -165,5 +174,9 @@ private:
 	ComputerControlInterfaceList m_demoServerClients{};
 	QVariantMap m_demoServerArguments{};
 	QTimer m_demoServerControlTimer{this};
+
+#ifdef Q_OS_WIN
+	VeyonServerInterface* m_server = nullptr;
+#endif
 
 };

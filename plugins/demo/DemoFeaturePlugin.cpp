@@ -24,6 +24,8 @@
 
 #include <QMessageBox>
 #include <QScreen>
+#include <QTimer>
+#include <QTcpSocket>
 
 #include "AuthenticationCredentials.h"
 #include "Computer.h"
@@ -36,6 +38,8 @@
 #include "FeatureWorkerManager.h"
 #include "HostAddress.h"
 #include "Logger.h"
+#include "PersistentDemoState.h"
+#include "PlatformInputDeviceFunctions.h"
 #include "PlatformPluginInterface.h"
 #include "PlatformSessionFunctions.h"
 #include "VeyonConfiguration.h"
@@ -117,6 +121,18 @@ DemoFeaturePlugin::DemoFeaturePlugin( QObject* parent ) :
 	connect( &m_demoServerControlTimer, &QTimer::timeout, this, &DemoFeaturePlugin::controlDemoServer );
 
 	updateFeatures();
+
+#ifdef Q_OS_WIN
+	if (VeyonCore::component() == VeyonCore::Component::Service)
+	{
+		connect(VeyonCore::instance(), &VeyonCore::initialized, this, []() {
+			if (PersistentDemoState::lockInput())
+			{
+				VeyonCore::platform().inputDeviceFunctions().disableInputDevices();
+			}
+		});
+	}
+#endif
 }
 
 
@@ -343,17 +359,31 @@ bool DemoFeaturePlugin::handleFeatureMessage( VeyonServerInterface& server,
 			return false;
 		}
 
-		if (message.command<FeatureCommand>() == FeatureCommand::StopDemoClient &&
-			server.featureWorkerManager().isWorkerRunning( message.featureUid() ) == false )
+		if (message.command<FeatureCommand>() == FeatureCommand::StopDemoClient)
 		{
+#ifdef Q_OS_WIN
+			PersistentDemoState::clear();
+			if (message.featureUid() == m_demoClientFullScreenFeature.uid())
+			{
+				VeyonCore::platform().inputDeviceFunctions().enableInputDevices();
+			}
+#endif
+			if (server.featureWorkerManager().isWorkerRunning( message.featureUid() ) == false )
+			{
+				return true;
+			}
+
+			server.featureWorkerManager().sendMessageToManagedSystemWorker( message );
 			return true;
 		}
 
+#ifndef Q_OS_WIN
 		if( VeyonCore::platform().sessionFunctions().currentSessionHasUser() == false )
 		{
 			vDebug() << "not starting demo client since not running in a user session";
 			return true;
 		}
+#endif
 
 		auto socket = qobject_cast<QTcpSocket *>( messageContext.ioDevice() );
 		if( socket == nullptr )
@@ -362,19 +392,32 @@ bool DemoFeaturePlugin::handleFeatureMessage( VeyonServerInterface& server,
 			return false;
 		}
 
+		auto outboundMessage = FeatureMessage{ message };
 		if (message.command<FeatureCommand>() == FeatureCommand::StartDemoClient &&
 			message.argument( Argument::DemoServerHost ).toString().isEmpty() )
 		{
-			// set the peer address as demo server host
-			server.featureWorkerManager().sendMessageToManagedSystemWorker(
-				FeatureMessage{ message }
-					.addArgument( Argument::DemoServerHost, socket->peerAddress().toString() ) );
+			outboundMessage.addArgument( Argument::DemoServerHost, socket->peerAddress().toString() );
 		}
-		else
+
+#ifdef Q_OS_WIN
+		if (message.command<FeatureCommand>() == FeatureCommand::StartDemoClient)
 		{
-			// forward message to worker
-			server.featureWorkerManager().sendMessageToManagedSystemWorker( message );
+			PersistentDemoState::Snapshot snapshot;
+			snapshot.featureUid = message.featureUid();
+			snapshot.demoServerHost = outboundMessage.argument( Argument::DemoServerHost ).toString();
+			snapshot.demoServerPort = outboundMessage.argument( Argument::DemoServerPort ).toInt();
+			snapshot.demoAccessToken = outboundMessage.argument( Argument::DemoAccessToken ).toByteArray();
+			snapshot.viewport = outboundMessage.argument( Argument::Viewport ).toRect();
+			snapshot.lockInput = message.featureUid() == m_demoClientFullScreenFeature.uid();
+			PersistentDemoState::setActive(snapshot);
+			if (snapshot.lockInput)
+			{
+				VeyonCore::platform().inputDeviceFunctions().disableInputDevices();
+			}
 		}
+#endif
+
+		server.featureWorkerManager().sendMessageToManagedSystemWorker( outboundMessage );
 
 		return true;
 	}
@@ -459,10 +502,86 @@ bool DemoFeaturePlugin::handleFeatureMessage( VeyonWorkerInterface& worker, cons
 
 bool DemoFeaturePlugin::isFeatureActive(VeyonServerInterface& server, Feature::Uid featureUid) const
 {
+#ifdef Q_OS_WIN
+	if (PersistentDemoState::isActive() &&
+		(featureUid == m_demoFeature.uid() ||
+		 featureUid == PersistentDemoState::snapshot().featureUid))
+	{
+		return true;
+	}
+#endif
+
 	return featureUid == m_demoFeature.uid() &&
 			(server.featureWorkerManager().isWorkerRunning(m_demoClientFullScreenFeature.uid()) ||
 			 server.featureWorkerManager().isWorkerRunning(m_demoClientWindowFeature.uid()));
 }
+
+
+
+void DemoFeaturePlugin::initializeServer(VeyonServerInterface& server)
+{
+#ifdef Q_OS_WIN
+	m_server = &server;
+	restorePersistedDemo();
+#else
+	Q_UNUSED(server)
+#endif
+}
+
+
+#ifdef Q_OS_WIN
+void DemoFeaturePlugin::restorePersistedDemo()
+{
+	if (m_server == nullptr)
+	{
+		return;
+	}
+
+	const auto snapshot = PersistentDemoState::snapshot();
+	if (snapshot.isValid() == false)
+	{
+		return;
+	}
+
+	if (snapshot.lockInput)
+	{
+		VeyonCore::platform().inputDeviceFunctions().disableInputDevices();
+	}
+
+	startPersistedDemoWorker();
+
+	if (m_server->featureWorkerManager().isWorkerRunning(snapshot.featureUid) == false)
+	{
+		vDebug() << "persisted demo worker not running yet - retrying";
+		QTimer::singleShot(RestoreDemoRetryInterval, this, &DemoFeaturePlugin::restorePersistedDemo);
+	}
+}
+
+
+
+void DemoFeaturePlugin::startPersistedDemoWorker()
+{
+	if (m_server == nullptr)
+	{
+		return;
+	}
+
+	const auto snapshot = PersistentDemoState::snapshot();
+	if (snapshot.isValid() == false ||
+		m_server->featureWorkerManager().isWorkerRunning(snapshot.featureUid))
+	{
+		return;
+	}
+
+	vInfo() << "restoring persisted demo" << snapshot.featureUid << snapshot.demoServerHost;
+	m_server->featureWorkerManager().sendMessageToManagedSystemWorker(
+		FeatureMessage{snapshot.featureUid, FeatureCommand::StartDemoClient}
+			.addArgument(Argument::DemoAccessToken, snapshot.demoAccessToken)
+			.addArgument(Argument::DemoServerHost, snapshot.demoServerHost)
+			.addArgument(Argument::DemoServerPort, snapshot.demoServerPort)
+			.addArgument(Argument::Viewport, snapshot.viewport));
+}
+#endif
 
 
 

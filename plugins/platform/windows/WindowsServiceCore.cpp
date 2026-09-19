@@ -29,6 +29,7 @@
 #include "PlatformPluginInterface.h"
 #include "SasEventListener.h"
 #include "VeyonCore.h"
+#include "VeyonDemoRegistry.h"
 #include "VeyonScreenLockRegistry.h"
 #include "WindowsCoreFunctions.h"
 #include "WindowsInputDeviceFunctions.h"
@@ -447,10 +448,10 @@ bool WindowsServiceCore::reportStatus( DWORD state, DWORD exitCode, DWORD waitHi
 
 
 
-bool WindowsServiceCore::persistedScreenLockIsSet()
+static bool persistedRegistrySzIsSet(const wchar_t* keyPath, const wchar_t* valueName)
 {
 	HKEY key = nullptr;
-	if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, VeyonScreenLockRegistryKey, 0,
+	if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, keyPath, 0,
 					  KEY_READ | KEY_WOW64_64KEY, &key) != ERROR_SUCCESS)
 	{
 		return false;
@@ -459,7 +460,7 @@ bool WindowsServiceCore::persistedScreenLockIsSet()
 	wchar_t buffer[128];
 	DWORD bufferSize = sizeof(buffer);
 	DWORD type = 0;
-	const auto status = RegQueryValueExW(key, VeyonScreenLockRegistryValue,
+	const auto status = RegQueryValueExW(key, valueName,
 										 nullptr, &type, reinterpret_cast<LPBYTE>(buffer), &bufferSize);
 	RegCloseKey(key);
 
@@ -468,14 +469,48 @@ bool WindowsServiceCore::persistedScreenLockIsSet()
 
 
 
+static bool persistedDemoInputLockIsSet()
+{
+	HKEY key = nullptr;
+	if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, VeyonDemoRegistryKey, 0,
+					  KEY_READ | KEY_WOW64_64KEY, &key) != ERROR_SUCCESS)
+	{
+		return false;
+	}
+
+	wchar_t buffer[16];
+	DWORD bufferSize = sizeof(buffer);
+	DWORD type = 0;
+	const auto status = RegQueryValueExW(key, VeyonDemoLockInputValue,
+										 nullptr, &type, reinterpret_cast<LPBYTE>(buffer), &bufferSize);
+	RegCloseKey(key);
+
+	if (status != ERROR_SUCCESS || type != REG_SZ || bufferSize < sizeof(wchar_t))
+	{
+		return false;
+	}
+
+	return buffer[0] == L'1';
+}
+
+
+
+bool WindowsServiceCore::persistedScreenLockIsSet()
+{
+	return persistedRegistrySzIsSet(VeyonScreenLockRegistryKey, VeyonScreenLockRegistryValue) ||
+			persistedDemoInputLockIsSet();
+}
+
+
+
 void WindowsServiceCore::startPersistedScreenLockWatch()
 {
 	DWORD disposition = 0;
-	if (RegCreateKeyExW(HKEY_LOCAL_MACHINE, VeyonScreenLockRegistryKey, 0, nullptr,
+	if (RegCreateKeyExW(HKEY_LOCAL_MACHINE, VeyonSolutionsRegistryKey, 0, nullptr,
 						REG_OPTION_NON_VOLATILE, KEY_NOTIFY | KEY_READ | KEY_WOW64_64KEY,
 						nullptr, &m_screenLockKey, &disposition) != ERROR_SUCCESS)
 	{
-		vWarning() << "failed to open HKLM screen-lock key for notification";
+		vWarning() << "failed to open HKLM Veyon Solutions key for notification";
 		m_screenLockKey = nullptr;
 	}
 
@@ -510,10 +545,11 @@ void WindowsServiceCore::armPersistedScreenLockWatch()
 		return;
 	}
 
-	if (RegNotifyChangeKeyValue(m_screenLockKey, FALSE, REG_NOTIFY_CHANGE_LAST_SET,
+	if (RegNotifyChangeKeyValue(m_screenLockKey, TRUE,
+								REG_NOTIFY_CHANGE_NAME | REG_NOTIFY_CHANGE_LAST_SET,
 								m_screenLockNotifyEvent, TRUE) != ERROR_SUCCESS)
 	{
-		vWarning() << "failed to arm HKLM screen-lock registry watch";
+		vWarning() << "failed to arm HKLM Veyon Solutions registry watch";
 	}
 }
 
