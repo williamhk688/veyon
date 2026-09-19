@@ -225,6 +225,11 @@ Section "Interception driver" SEC_INTERCEPTION
 ${INSTALL_TYPE}
 SetOutPath "$INSTDIR\interception"
 File "interception/*"
+; Kernel keyboard filter used to block Ctrl+Alt+Del. Requires a reboot
+; before the first lock can intercept the Secure Attention Sequence.
+ClearErrors
+ExecWait '"$INSTDIR\interception\install-interception.exe" /install'
+SetRebootFlag true
 SectionEnd
 
 Function RunConfigurator

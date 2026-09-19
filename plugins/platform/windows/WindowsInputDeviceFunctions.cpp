@@ -98,7 +98,15 @@ void WindowsInputDeviceFunctions::enableInputDevices()
 	restoreHIDService();
 	restorePowerScheme();
 
-	WindowsDeviceFunctions::setDevicesState(inputDevicesToDisable(), WindowsDeviceFunctions::State::Enabled);
+	if (m_disabledInputDevices.isEmpty() == false)
+	{
+		WindowsDeviceFunctions::setDevicesState(m_disabledInputDevices, WindowsDeviceFunctions::State::Enabled);
+		m_disabledInputDevices.clear();
+	}
+	else
+	{
+		WindowsDeviceFunctions::setDevicesState(inputDevicesToDisable(), WindowsDeviceFunctions::State::Enabled);
+	}
 
 	m_inputDevicesDisabled = false;
 }
@@ -113,7 +121,15 @@ void WindowsInputDeviceFunctions::disableInputDevices()
 		stopHIDService();
 		setCustomPowerScheme();
 
-		WindowsDeviceFunctions::setDevicesState(inputDevicesToDisable(), WindowsDeviceFunctions::State::Disabled);
+		m_disabledInputDevices = inputDevicesToDisable();
+		if (m_interceptionContext == nullptr)
+		{
+			vWarning() << "Interception driver is not available; falling back to disabling keyboard and mouse devices";
+			m_disabledInputDevices += WindowsDeviceFunctions::findKeyboardDevices();
+			m_disabledInputDevices += WindowsDeviceFunctions::findMouseDevices();
+		}
+
+		WindowsDeviceFunctions::setDevicesState(m_disabledInputDevices, WindowsDeviceFunctions::State::Disabled);
 
 		m_inputDevicesDisabled = true;
 	}

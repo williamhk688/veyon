@@ -27,6 +27,7 @@
 #include <interception.h>
 
 #include "PlatformInputDeviceFunctions.h"
+#include "WindowsDeviceFunctions.h"
 
 // clazy:excludeall=copyable-polymorphic
 
@@ -64,6 +65,7 @@ private:
 	static int interceptionInstaller( const QString& argument );
 
 	bool m_inputDevicesDisabled{false};
+	WindowsDeviceFunctions::DeviceList m_disabledInputDevices{};
 	InterceptionContext m_interceptionContext{nullptr};
 	QString m_hidServiceName{QStringLiteral("hidserv")};
 	bool m_hidServiceStatusInitialized{false};
