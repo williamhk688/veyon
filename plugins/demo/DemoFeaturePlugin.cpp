@@ -199,10 +199,14 @@ bool DemoFeaturePlugin::startFeature( VeyonMasterInterface& master, const Featur
 {
 	if( feature == m_shareOwnScreenWindowFeature || feature == m_shareOwnScreenFullScreenFeature )
 	{
+		// never lock the teacher PC itself; it is often listed as a room computer
+		auto demoClients = computerControlInterfaces;
+		demoClients.removeLocalHostInterfaces();
+
 		// start demo clients
 		controlFeature( feature == m_shareOwnScreenFullScreenFeature ? m_demoClientFullScreenFeature.uid()
 																	 : m_demoClientWindowFeature.uid(),
-						Operation::Start, {}, computerControlInterfaces );
+						Operation::Start, {}, demoClients );
 
 		// start demo server
 		controlFeature( m_demoServerFeature.uid(), Operation::Start, {},
@@ -261,7 +265,10 @@ bool DemoFeaturePlugin::startFeature( VeyonMasterInterface& master, const Featur
 																	  : m_demoClientWindowFeature.uid(),
 						Operation::Start, demoClientArgs, userDemoControlInterfaces );
 
-		controlFeature( m_demoClientWindowFeature.uid(), Operation::Start, demoClientArgs,
+		// teacher's local preview must not persist or lock input
+		auto previewArgs = demoClientArgs;
+		previewArgs.insert(argToString(Argument::LockInput), false);
+		controlFeature( m_demoClientWindowFeature.uid(), Operation::Start, previewArgs,
 						{ master.localSessionControlInterface().weakPointer() } );
 
 		// start demo server
@@ -363,10 +370,7 @@ bool DemoFeaturePlugin::handleFeatureMessage( VeyonServerInterface& server,
 		{
 #ifdef Q_OS_WIN
 			PersistentDemoState::clear();
-			if (message.featureUid() == m_demoClientFullScreenFeature.uid())
-			{
-				VeyonCore::platform().inputDeviceFunctions().enableInputDevices();
-			}
+			VeyonCore::platform().inputDeviceFunctions().enableInputDevices();
 #endif
 			if (server.featureWorkerManager().isWorkerRunning( message.featureUid() ) == false )
 			{
@@ -402,16 +406,17 @@ bool DemoFeaturePlugin::handleFeatureMessage( VeyonServerInterface& server,
 #ifdef Q_OS_WIN
 		if (message.command<FeatureCommand>() == FeatureCommand::StartDemoClient)
 		{
+			const auto lockInputArg = outboundMessage.argument(Argument::LockInput);
 			PersistentDemoState::Snapshot snapshot;
 			snapshot.featureUid = message.featureUid();
 			snapshot.demoServerHost = outboundMessage.argument( Argument::DemoServerHost ).toString();
 			snapshot.demoServerPort = outboundMessage.argument( Argument::DemoServerPort ).toInt();
 			snapshot.demoAccessToken = outboundMessage.argument( Argument::DemoAccessToken ).toByteArray();
 			snapshot.viewport = outboundMessage.argument( Argument::Viewport ).toRect();
-			snapshot.lockInput = message.featureUid() == m_demoClientFullScreenFeature.uid();
-			PersistentDemoState::setActive(snapshot);
+			snapshot.lockInput = lockInputArg.isValid() ? lockInputArg.toBool() : true;
 			if (snapshot.lockInput)
 			{
+				PersistentDemoState::setActive(snapshot);
 				VeyonCore::platform().inputDeviceFunctions().disableInputDevices();
 			}
 		}
@@ -761,11 +766,14 @@ bool DemoFeaturePlugin::controlDemoClient( Feature::Uid featureUid, Operation op
 			}
 		}
 
+		const auto lockInput = arguments.value(argToString(Argument::LockInput), true).toBool();
+
 		sendFeatureMessage(FeatureMessage{featureUid, FeatureCommand::StartDemoClient}
 								.addArgument( Argument::DemoAccessToken, demoAccessToken )
 								.addArgument( Argument::DemoServerHost, demoServerHost )
 								.addArgument( Argument::DemoServerPort, demoServerPort )
-								.addArgument( Argument::Viewport, viewport ),
+								.addArgument( Argument::Viewport, viewport )
+								.addArgument( Argument::LockInput, lockInput ),
 							computerControlInterfaces );
 
 		return true;

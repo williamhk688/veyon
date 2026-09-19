@@ -54,7 +54,8 @@ public:
 		ViewportY,
 		ViewportWidth,
 		ViewportHeight,
-		VncServerPortOffset
+		VncServerPortOffset,
+		LockInput
 	};
 	Q_ENUM(Argument)
 
@@ -68,7 +69,7 @@ public:
 
 	QVersionNumber version() const override
 	{
-		return QVersionNumber( 1, 2 );
+		return QVersionNumber( 1, 3 );
 	}
 
 	QString name() const override
