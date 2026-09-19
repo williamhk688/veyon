@@ -28,6 +28,7 @@
 #include <QProcess>
 
 #include "ConfigurationManager.h"
+#include "Logger.h"
 #include "PlatformServiceFunctions.h"
 #include "ProcessHelper.h"
 #include "VeyonConfiguration.h"
