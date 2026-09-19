@@ -3,7 +3,7 @@
  * windows and surfaces only so nested widgets stay transparent. */
 
 QWidget {
-	font-family: "Segoe UI", "Inter", "Noto Sans", "Microsoft YaHei UI", "PingFang SC", sans-serif;
+	font-family: "Noto Sans", "DejaVu Sans", "Segoe UI", "Microsoft YaHei UI", sans-serif;
 	font-size: 13px;
 	color: #e8eef8;
 	selection-background-color: #0891b2;
@@ -35,8 +35,8 @@ QLabel {
 }
 
 QGroupBox {
-	background-color: #141b2d;
-	border: 1px solid #2a3550;
+	background-color: #1e2a44;
+	border: 1px solid #3b4d6e;
 	border-radius: 14px;
 	margin-top: 18px;
 	padding: 16px 14px 14px 14px;
@@ -253,8 +253,8 @@ QRadioButton::indicator:checked {
 }
 
 QTabWidget::pane {
-	border: 1px solid #2a3550;
-	background-color: #141b2d;
+	border: 1px solid #3b4d6e;
+	background-color: #1e2a44;
 	border-radius: 14px;
 	top: -1px;
 	padding: 8px;

@@ -29,6 +29,8 @@
 #include <QApplication>
 #include <QDir>
 #include <QFile>
+#include <QFont>
+#include <QFontInfo>
 #include <QGroupBox>
 #include <QJsonDocument>
 #include <QLabel>
@@ -611,6 +613,14 @@ void VeyonCore::initUi()
 		{
 			app->setStyle(QStyleFactory::create(QStringLiteral("Fusion")));
 		}
+
+		QFont uiFont(QStringLiteral("Noto Sans"));
+		if (QFontInfo(uiFont).family().contains(QLatin1String("Noto"), Qt::CaseInsensitive) == false)
+		{
+			uiFont.setFamily(QStringLiteral("DejaVu Sans"));
+		}
+		uiFont.setPixelSize(13);
+		app->setFont(uiFont);
 
 		const auto darkMode = useDarkMode();
 

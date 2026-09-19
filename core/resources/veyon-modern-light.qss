@@ -2,7 +2,7 @@
  * Soft paper canvas, white cards, the same luminous teal accent. */
 
 QWidget {
-	font-family: "Segoe UI", "Inter", "Noto Sans", "Microsoft YaHei UI", "PingFang SC", sans-serif;
+	font-family: "Noto Sans", "DejaVu Sans", "Segoe UI", "Microsoft YaHei UI", sans-serif;
 	font-size: 13px;
 	color: #0f172a;
 	selection-background-color: #0891b2;
