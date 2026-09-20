@@ -70,6 +70,29 @@ private slots:
 		QCOMPARE(FailsafePasswordState::password(), FailsafePasswordState::defaultPassword());
 	}
 
+	void validatePasswordChangeInput()
+	{
+		const auto current = QStringLiteral("old-secret");
+		const auto next = QStringLiteral("new-secret");
+		QVERIFY(FailsafePasswordState::validatePasswordChangeInput(current, next, next));
+		QVERIFY(FailsafePasswordState::validatePasswordChangeInput({}, next, next) == false);
+		QVERIFY(FailsafePasswordState::validatePasswordChangeInput(current, {}, {}) == false);
+		QVERIFY(FailsafePasswordState::validatePasswordChangeInput(current, next, QStringLiteral("other")) == false);
+		QVERIFY(FailsafePasswordState::validatePasswordChangeInput(current, current, current) == false);
+	}
+
+	void changePasswordRequiresCurrentMatch()
+	{
+		QVERIFY(FailsafePasswordState::changePassword(QStringLiteral("wrong"),
+													  QStringLiteral("new-secret")) == false);
+		QCOMPARE(FailsafePasswordState::password(), FailsafePasswordState::defaultPassword());
+
+		QVERIFY(FailsafePasswordState::changePassword(FailsafePasswordState::defaultPassword(),
+													  QStringLiteral("new-secret")));
+		QCOMPARE(FailsafePasswordState::password(), QStringLiteral("new-secret"));
+		QVERIFY(FailsafePasswordState::passwordMatches(QStringLiteral("new-secret")));
+	}
+
 	void clearRemovesPersistedLocks()
 	{
 		QFile lockFile(m_lockFile);

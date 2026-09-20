@@ -47,6 +47,21 @@ public:
 	static bool setPassword(const QString& password);
 
 	/*!
+	 * Master-side form checks: current and new must be non-empty, the two
+	 * new-password fields must match, and the new value must differ from
+	 * the current one. Does not consult the stored password.
+	 */
+	static bool validatePasswordChangeInput(const QString& currentPassword,
+											const QString& newPassword,
+											const QString& confirmation);
+
+	/*!
+	 * Student-side change: succeeds only when currentPassword matches the
+	 * stored (or default) value, then writes newPassword.
+	 */
+	static bool changePassword(const QString& currentPassword, const QString& newPassword);
+
+	/*!
 	 * Deletes the persisted screen-lock and demo input-lock flags so the
 	 * Windows service registry watch re-enables input after a local unlock.
 	 */

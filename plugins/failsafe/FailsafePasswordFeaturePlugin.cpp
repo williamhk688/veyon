@@ -25,13 +25,14 @@
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QEventLoop>
+#include <QFormLayout>
 #include <QGroupBox>
-#include <QInputDialog>
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
 #include <QMessageBox>
 #include <QProgressDialog>
+#include <QPushButton>
 #include <QTimer>
 #include <QVBoxLayout>
 #include <QWidget>
@@ -80,10 +81,12 @@ bool FailsafePasswordFeaturePlugin::controlFeature(Feature::Uid featureUid, Oper
 	}
 
 	const auto password = arguments.value(argToString(Argument::Password)).toString();
+	const auto oldPassword = arguments.value(argToString(Argument::OldPassword)).toString();
 	const auto requestId = arguments.value(argToString(Argument::RequestId));
 
 	sendFeatureMessage(FeatureMessage{featureUid, FeatureCommand::SetPassword}
 					   .addArgument(Argument::Password, password)
+					   .addArgument(Argument::OldPassword, oldPassword)
 					   .addArgument(Argument::RequestId, requestId),
 					   computerControlInterfaces);
 	return true;
@@ -113,12 +116,9 @@ bool FailsafePasswordFeaturePlugin::startFeature(VeyonMasterInterface& master, c
 		return true;
 	}
 
-	bool ok = false;
-	const auto password = QInputDialog::getText(master.mainWindow(),
-												feature.displayName(),
-												tr("Enter the new failsafe unlock password:"),
-												QLineEdit::Password, {}, &ok);
-	if (ok == false || password.isEmpty())
+	QString currentPassword;
+	QString password;
+	if (promptPasswordChange(master.mainWindow(), &currentPassword, &password) == false)
 	{
 		return true;
 	}
@@ -140,6 +140,7 @@ bool FailsafePasswordFeaturePlugin::startFeature(VeyonMasterInterface& master, c
 	controlFeature(m_changePasswordFeature.uid(), Operation::Start,
 				   {
 					   { argToString(Argument::Password), password },
+					   { argToString(Argument::OldPassword), currentPassword },
 					   { argToString(Argument::RequestId), requestId.toString(QUuid::WithoutBraces) }
 				   },
 				   computerControlInterfaces);
@@ -197,11 +198,12 @@ bool FailsafePasswordFeaturePlugin::handleFeatureMessage(VeyonServerInterface& s
 	}
 
 	const auto password = message.argument(Argument::Password).toString();
-	const auto success = FailsafePasswordState::setPassword(password);
+	const auto oldPassword = message.argument(Argument::OldPassword).toString();
+	const auto success = FailsafePasswordState::changePassword(oldPassword, password);
 
 	if (success == false)
 	{
-		vWarning() << "failed to store failsafe unlock password";
+		vWarning() << "failed to update failsafe unlock password";
 	}
 
 	return server.sendFeatureMessageReply(messageContext,
@@ -224,6 +226,78 @@ QString FailsafePasswordFeaturePlugin::computerLabel(const ComputerControlInterf
 		label = controlInterface->computer().displayName();
 	}
 	return label;
+}
+
+
+
+bool FailsafePasswordFeaturePlugin::promptPasswordChange(QWidget* parent,
+														 QString* currentPassword,
+														 QString* newPassword) const
+{
+	QDialog dialog(parent);
+	dialog.setObjectName(QStringLiteral("failsafeChangePasswordDialog"));
+	dialog.setWindowTitle(m_changePasswordFeature.displayName());
+	dialog.setWindowModality(Qt::ApplicationModal);
+	dialog.setMinimumWidth(440);
+
+	auto* layout = new QVBoxLayout(&dialog);
+	auto* intro = new QLabel(
+		tr("請輸入目前解鎖密碼，並輸入兩次新密碼。學生電腦只會在目前密碼正確時才更新。"),
+		&dialog);
+	intro->setWordWrap(true);
+	layout->addWidget(intro);
+
+	auto* currentEdit = new QLineEdit(&dialog);
+	currentEdit->setObjectName(QStringLiteral("failsafeCurrentPassword"));
+	currentEdit->setEchoMode(QLineEdit::Password);
+	auto* newEdit = new QLineEdit(&dialog);
+	newEdit->setObjectName(QStringLiteral("failsafeNewPassword"));
+	newEdit->setEchoMode(QLineEdit::Password);
+	auto* confirmEdit = new QLineEdit(&dialog);
+	confirmEdit->setObjectName(QStringLiteral("failsafeConfirmPassword"));
+	confirmEdit->setEchoMode(QLineEdit::Password);
+
+	auto* form = new QFormLayout;
+	form->addRow(tr("目前密碼 (Current)"), currentEdit);
+	form->addRow(tr("新密碼 (New)"), newEdit);
+	form->addRow(tr("再輸入新密碼 (Confirm)"), confirmEdit);
+	layout->addLayout(form);
+
+	auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
+	buttons->button(QDialogButtonBox::Ok)->setText(tr("更改"));
+	buttons->button(QDialogButtonBox::Cancel)->setText(tr("取消"));
+	QObject::connect(buttons, &QDialogButtonBox::accepted, &dialog, [&]() {
+		const auto current = currentEdit->text();
+		const auto next = newEdit->text();
+		const auto confirm = confirmEdit->text();
+		if (FailsafePasswordState::validatePasswordChangeInput(current, next, confirm) == false)
+		{
+			QString message;
+			if (current.isEmpty() || next.isEmpty())
+			{
+				message = tr("請輸入目前密碼，並輸入兩次新密碼。");
+			}
+			else if (next != confirm)
+			{
+				message = tr("兩次新密碼不一致，請再輸入一次。");
+			}
+			else
+			{
+				message = tr("新密碼不能與目前密碼相同。");
+			}
+			QMessageBox::warning(&dialog, m_changePasswordFeature.displayName(), message);
+			return;
+		}
+
+		*currentPassword = current;
+		*newPassword = next;
+		dialog.accept();
+	});
+	QObject::connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+	layout->addWidget(buttons);
+
+	currentEdit->setFocus();
+	return dialog.exec() == QDialog::Accepted;
 }
 
 

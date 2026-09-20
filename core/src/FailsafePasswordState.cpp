@@ -229,6 +229,31 @@ bool FailsafePasswordState::setPassword(const QString& password)
 
 
 
+bool FailsafePasswordState::validatePasswordChangeInput(const QString& currentPassword,
+														const QString& newPassword,
+														const QString& confirmation)
+{
+	return currentPassword.isEmpty() == false &&
+			newPassword.isEmpty() == false &&
+			newPassword == confirmation &&
+			newPassword != currentPassword;
+}
+
+
+
+bool FailsafePasswordState::changePassword(const QString& currentPassword, const QString& newPassword)
+{
+	if (validatePasswordChangeInput(currentPassword, newPassword, newPassword) == false ||
+		passwordMatches(currentPassword) == false)
+	{
+		return false;
+	}
+
+	return setPassword(newPassword);
+}
+
+
+
 bool FailsafePasswordState::clearPersistedInputLocks()
 {
 	bool ok = true;
