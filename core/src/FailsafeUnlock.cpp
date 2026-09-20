@@ -141,7 +141,7 @@ void FailsafeHotkeyMonitor::notifyHotkeyPressed()
 
 
 
-void FailsafeHotkeyMonitor::setPasswordPromptPassthrough(bool enabled)
+void FailsafeHotkeyMonitor::setPasswordPromptActive(bool enabled)
 {
 #ifdef Q_OS_WIN
 	if (m_passthroughEvent == nullptr)
@@ -164,7 +164,7 @@ void FailsafeHotkeyMonitor::setPasswordPromptPassthrough(bool enabled)
 
 
 
-bool FailsafeHotkeyMonitor::passwordPromptPassthrough() const
+bool FailsafeHotkeyMonitor::passwordPromptActive() const
 {
 #ifdef Q_OS_WIN
 	if (m_passthroughEvent == nullptr)
@@ -204,7 +204,7 @@ bool FailsafeUnlock::prompt(QWidget* parent)
 	}
 
 	dialogOpen = true;
-	FailsafeHotkeyMonitor::instance().setPasswordPromptPassthrough(true);
+	FailsafeHotkeyMonitor::instance().setPasswordPromptActive(true);
 
 	QInputDialog dialog(parent);
 	dialog.setWindowTitle(QCoreApplication::translate("FailsafeUnlock", "Unlock"));
@@ -216,7 +216,7 @@ bool FailsafeUnlock::prompt(QWidget* parent)
 
 	if (dialog.exec() != QDialog::Accepted)
 	{
-		FailsafeHotkeyMonitor::instance().setPasswordPromptPassthrough(false);
+		FailsafeHotkeyMonitor::instance().setPasswordPromptActive(false);
 		dialogOpen = false;
 		return false;
 	}
@@ -228,13 +228,13 @@ bool FailsafeUnlock::prompt(QWidget* parent)
 		QMessageBox::warning(parent,
 							 QCoreApplication::translate("FailsafeUnlock", "Unlock"),
 							 QCoreApplication::translate("FailsafeUnlock", "The password is incorrect."));
-		FailsafeHotkeyMonitor::instance().setPasswordPromptPassthrough(false);
+		FailsafeHotkeyMonitor::instance().setPasswordPromptActive(false);
 		dialogOpen = false;
 		return false;
 	}
 
 	FailsafePasswordState::clearPersistedInputLocks();
-	FailsafeHotkeyMonitor::instance().setPasswordPromptPassthrough(false);
+	FailsafeHotkeyMonitor::instance().setPasswordPromptActive(false);
 	dialogOpen = false;
 	vInfo() << "failsafe unlock succeeded";
 	return true;

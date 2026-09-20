@@ -35,6 +35,9 @@ class QWidget;
  * Cross-process hotkey bridge. On Windows the Interception receive thread
  * (and a Global named event) notify this object so LockWidget can prompt
  * even while FILTER_KEY_ALL swallows ordinary Qt key events.
+ *
+ * passwordPromptActive() does not mean "pass every key". While the dialog
+ * is open, Interception still filters keys through FailsafePasswordKeyFilter.
  */
 class VEYON_CORE_EXPORT FailsafeHotkeyMonitor : public QObject
 {
@@ -43,8 +46,8 @@ public:
 	static FailsafeHotkeyMonitor& instance();
 
 	void notifyHotkeyPressed();
-	void setPasswordPromptPassthrough(bool enabled);
-	bool passwordPromptPassthrough() const;
+	void setPasswordPromptActive(bool enabled);
+	bool passwordPromptActive() const;
 
 	static bool isUnlockHotkey(const QKeyEvent* event);
 

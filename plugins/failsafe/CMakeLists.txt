@@ -17,4 +17,14 @@ if(WITH_TESTS)
 	target_link_libraries(FailsafePasswordStateTest PRIVATE
 		Qt${QT_MAJOR_VERSION}::Test
 		veyon-core)
+
+	add_executable(FailsafePasswordKeyFilterTest
+		FailsafePasswordKeyFilterTest.cpp)
+	add_test(NAME FailsafePasswordKeyFilterTest COMMAND FailsafePasswordKeyFilterTest)
+	target_include_directories(FailsafePasswordKeyFilterTest PRIVATE
+		${CMAKE_CURRENT_SOURCE_DIR}
+		${CMAKE_CURRENT_BINARY_DIR})
+	target_link_libraries(FailsafePasswordKeyFilterTest PRIVATE
+		Qt${QT_MAJOR_VERSION}::Test
+		veyon-core)
 endif()

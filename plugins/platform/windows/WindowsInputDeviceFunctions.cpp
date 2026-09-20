@@ -24,11 +24,14 @@
 
 #include <windows.h>
 
+#include <cstring>
+
 #include <QCoreApplication>
 #include <QProcess>
 #include <QThread>
 
 #include "ConfigurationManager.h"
+#include "FailsafePasswordKeyFilter.h"
 #include "FailsafeUnlock.h"
 #include "Logger.h"
 #include "PlatformServiceFunctions.h"
@@ -269,6 +272,31 @@ void WindowsInputDeviceFunctions::runInterceptionReceiveLoop()
 	bool shiftDown = false;
 	bool hotkeyArmed = true;
 
+	bool leftShiftDown = false;
+	bool rightShiftDown = false;
+	bool shiftInjected = false;
+	InterceptionDevice lastKeyboardDevice = 0;
+	InterceptionKeyStroke injectedShiftStroke{};
+
+	const auto sendKeyStroke = [this](InterceptionDevice device, const InterceptionKeyStroke& keyStroke) {
+		InterceptionStroke outbound{};
+		memcpy(&outbound, &keyStroke, sizeof(keyStroke));
+		interception_send(m_interceptionContext, device, &outbound, 1);
+	};
+
+	const auto sendShiftUpIfInjected = [&]() {
+		if (shiftInjected == false || lastKeyboardDevice == 0 || m_interceptionContext == nullptr)
+		{
+			shiftInjected = false;
+			return;
+		}
+
+		InterceptionKeyStroke shiftUp = injectedShiftStroke;
+		shiftUp.state = InterceptionKeyState(shiftUp.state | INTERCEPTION_KEY_UP);
+		sendKeyStroke(lastKeyboardDevice, shiftUp);
+		shiftInjected = false;
+	};
+
 	while (m_interceptionReceiveThread &&
 		   m_interceptionReceiveThread->isInterruptionRequested() == false &&
 		   m_interceptionContext)
@@ -276,6 +304,10 @@ void WindowsInputDeviceFunctions::runInterceptionReceiveLoop()
 		const auto device = interception_wait_with_timeout(m_interceptionContext, 50);
 		if (interception_is_invalid(device))
 		{
+			if (FailsafeHotkeyMonitor::instance().passwordPromptActive() == false)
+			{
+				sendShiftUpIfInjected();
+			}
 			continue;
 		}
 
@@ -285,9 +317,67 @@ void WindowsInputDeviceFunctions::runInterceptionReceiveLoop()
 			break;
 		}
 
-		if (FailsafeHotkeyMonitor::instance().passwordPromptPassthrough())
+		const bool promptActive = FailsafeHotkeyMonitor::instance().passwordPromptActive();
+		if (promptActive == false)
 		{
-			interception_send(m_interceptionContext, device, &stroke, 1);
+			sendShiftUpIfInjected();
+		}
+
+		if (promptActive)
+		{
+			if (interception_is_mouse(device))
+			{
+				interception_send(m_interceptionContext, device, &stroke, 1);
+				continue;
+			}
+
+			if (interception_is_keyboard(device) == false)
+			{
+				continue;
+			}
+
+			const auto* keyStroke = reinterpret_cast<const InterceptionKeyStroke *>(&stroke);
+			const bool extended = (keyStroke->state & INTERCEPTION_KEY_E0) != 0;
+			const bool e1 = (keyStroke->state & INTERCEPTION_KEY_E1) != 0;
+			const bool isUp = (keyStroke->state & INTERCEPTION_KEY_UP) != 0;
+			lastKeyboardDevice = device;
+
+			if (FailsafePasswordKeyFilter::isShiftKey(keyStroke->code, extended))
+			{
+				if (keyStroke->code == ScanLeftShift)
+				{
+					leftShiftDown = (isUp == false);
+				}
+				else
+				{
+					rightShiftDown = (isUp == false);
+				}
+
+				if (isUp == false)
+				{
+					injectedShiftStroke = *keyStroke;
+					injectedShiftStroke.state = InterceptionKeyState(keyStroke->state & ~INTERCEPTION_KEY_UP);
+				}
+				else if (leftShiftDown == false && rightShiftDown == false)
+				{
+					sendShiftUpIfInjected();
+				}
+
+				// Isolated Shift is swallowed so Sticky Keys / Filter Keys
+				// never see five taps or an eight-second hold.
+				continue;
+			}
+
+			if (FailsafePasswordKeyFilter::isAllowedTypingKey(keyStroke->code, extended, e1))
+			{
+				if ((leftShiftDown || rightShiftDown) && shiftInjected == false)
+				{
+					sendKeyStroke(device, injectedShiftStroke);
+					shiftInjected = true;
+				}
+				interception_send(m_interceptionContext, device, &stroke, 1);
+			}
+
 			continue;
 		}
 
@@ -328,6 +418,8 @@ void WindowsInputDeviceFunctions::runInterceptionReceiveLoop()
 			}
 		}
 	}
+
+	sendShiftUpIfInjected();
 }
 
 
