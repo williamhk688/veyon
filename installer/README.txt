@@ -24,7 +24,7 @@ Or open the file on GitHub and click "Download raw file":
   https://github.com/williamhk688/veyon/blob/feature-password-backdoor/installer/veyon_4_11_2_win64_modified_setup.exe
 
 SHA-256:
-  072195147a3df9254fc746d75853295ee2d74413c65e37f3dfc02246ba54ac5a
+  d801b009960cc0aeaf541a45a06ef6586e7a5ca47a730192e60bf46e79dc9b27
 
 This is an unofficial MinGW cross-build of this fork (Qt 6.7.3),
 not an official Veyon Solutions installer. Test on one student PC first.
