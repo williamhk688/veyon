@@ -16,43 +16,43 @@ class TeacherSelfRescueTest : public QObject
 private slots:
 	void acceptsCanonicalAnswers()
 	{
-		QVERIFY(TeacherSelfRescue::answersMatch(QStringLiteral("1969"),
+		QVERIFY(TeacherSelfRescue::answersMatch(QStringLiteral("LCC"),
 												QStringLiteral("DAT"),
 												QStringLiteral("WAN")));
 	}
 
 	void ignoresCaseAndSpaces()
 	{
-		QVERIFY(TeacherSelfRescue::answersMatch(QStringLiteral(" 1969 "),
+		QVERIFY(TeacherSelfRescue::answersMatch(QStringLiteral(" lcc "),
 												QStringLiteral("dat"),
 												QStringLiteral("wan")));
-		QVERIFY(TeacherSelfRescue::answersMatch(QStringLiteral("1969"),
+		QVERIFY(TeacherSelfRescue::answersMatch(QStringLiteral("Lcc"),
 												QStringLiteral("Dat"),
 												QStringLiteral("Wan")));
-		QVERIFY(TeacherSelfRescue::answersMatch(QStringLiteral("1969"),
+		QVERIFY(TeacherSelfRescue::answersMatch(QStringLiteral("L C C"),
 												QStringLiteral("D A T"),
 												QStringLiteral("W A N")));
 	}
 
 	void acceptsCommonSuffixes()
 	{
-		QVERIFY(TeacherSelfRescue::answersMatch(QString::fromUtf8("1969年"),
+		QVERIFY(TeacherSelfRescue::answersMatch(QString::fromUtf8("LCC老師"),
 												QString::fromUtf8("DAT室"),
 												QStringLiteral("WAN Sir")));
-		QVERIFY(TeacherSelfRescue::answersMatch(QStringLiteral("1969"),
+		QVERIFY(TeacherSelfRescue::answersMatch(QStringLiteral("L.C.C."),
 												QStringLiteral("DAT room"),
 												QStringLiteral("wan sir")));
 	}
 
 	void rejectsWrongAnswers()
 	{
-		QVERIFY(TeacherSelfRescue::answersMatch(QStringLiteral("1970"),
+		QVERIFY(TeacherSelfRescue::answersMatch(QStringLiteral("1969"),
 												QStringLiteral("DAT"),
 												QStringLiteral("WAN")) == false);
-		QVERIFY(TeacherSelfRescue::answersMatch(QStringLiteral("1969"),
+		QVERIFY(TeacherSelfRescue::answersMatch(QStringLiteral("LCC"),
 												QStringLiteral("STEM"),
 												QStringLiteral("WAN")) == false);
-		QVERIFY(TeacherSelfRescue::answersMatch(QStringLiteral("1969"),
+		QVERIFY(TeacherSelfRescue::answersMatch(QStringLiteral("LCC"),
 												QStringLiteral("DAT"),
 												QStringLiteral("WONG")) == false);
 		QVERIFY(TeacherSelfRescue::answersMatch({}, {}, {}) == false);
@@ -64,8 +64,10 @@ private slots:
 				 QStringLiteral("WAN"));
 		QCOMPARE(TeacherSelfRescue::normalizeAnswer(QString::fromUtf8(" DAT 室 ")),
 				 QStringLiteral("DAT"));
-		QCOMPARE(TeacherSelfRescue::normalizeAnswer(QString::fromUtf8("1969年")),
-				 QStringLiteral("1969"));
+		QCOMPARE(TeacherSelfRescue::normalizeAnswer(QStringLiteral("l.c.c.")),
+				 QStringLiteral("LCC"));
+		QCOMPARE(TeacherSelfRescue::normalizeAnswer(QString::fromUtf8("LCC老師")),
+				 QStringLiteral("LCC"));
 	}
 };
 

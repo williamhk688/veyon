@@ -45,6 +45,7 @@ QString TeacherSelfRescue::normalizeAnswer(const QString& answer)
 {
 	auto normalized = answer.trimmed().simplified().toUpper();
 	normalized.remove(QLatin1Char(' '));
+	normalized.remove(QLatin1Char('.'));
 	normalized.remove(QChar(0x3000)); // ideographic space
 
 	const auto stripSuffix = [&normalized](const QString& suffix) {
@@ -56,6 +57,7 @@ QString TeacherSelfRescue::normalizeAnswer(const QString& answer)
 
 	stripSuffix(QStringLiteral("SIR"));
 	stripSuffix(QStringLiteral("ROOM"));
+	stripSuffix(QString::fromUtf8("老師"));
 	stripSuffix(QString::fromUtf8("室"));
 	stripSuffix(QString::fromUtf8("年"));
 	return normalized;
@@ -63,11 +65,11 @@ QString TeacherSelfRescue::normalizeAnswer(const QString& answer)
 
 
 
-bool TeacherSelfRescue::answersMatch(const QString& foundingYear,
+bool TeacherSelfRescue::answersMatch(const QString& itCoordinatorInitials,
 									 const QString& steamFormerRoom,
 									 const QString& firstComputerTeacher)
 {
-	return normalizeAnswer(foundingYear) == QLatin1String(ExpectedFoundingYear) &&
+	return normalizeAnswer(itCoordinatorInitials) == QLatin1String(ExpectedItCoordinatorInitials) &&
 			normalizeAnswer(steamFormerRoom) == QLatin1String(ExpectedSteamFormerRoom) &&
 			normalizeAnswer(firstComputerTeacher) == QLatin1String(ExpectedFirstComputerTeacher);
 }
@@ -144,15 +146,15 @@ bool TeacherSelfRescue::promptSecurityQuestions(QWidget* parent)
 	layout->addWidget(intro);
 
 	auto* form = new QFormLayout;
-	auto* yearEdit = new QLineEdit(&dialog);
-	yearEdit->setObjectName(QStringLiteral("teacherSelfRescueAnswer1"));
+	auto* q1Edit = new QLineEdit(&dialog);
+	q1Edit->setObjectName(QStringLiteral("teacherSelfRescueAnswer1"));
 	auto* roomEdit = new QLineEdit(&dialog);
 	roomEdit->setObjectName(QStringLiteral("teacherSelfRescueAnswer2"));
 	auto* teacherEdit = new QLineEdit(&dialog);
 	teacherEdit->setObjectName(QStringLiteral("teacherSelfRescueAnswer3"));
 
 	form->addRow(QCoreApplication::translate("TeacherSelfRescue",
-											 "Q1: 本校創校年份為？"), yearEdit);
+											 "Q1: 本校資訊科技組主管老師是 ___ (Name initial)。"), q1Edit);
 	form->addRow(QCoreApplication::translate("TeacherSelfRescue",
 											 "Q2: STEAM 室的前身為 ___ 室。"), roomEdit);
 	form->addRow(QCoreApplication::translate("TeacherSelfRescue",
@@ -165,7 +167,7 @@ bool TeacherSelfRescue::promptSecurityQuestions(QWidget* parent)
 	buttons->button(QDialogButtonBox::Cancel)->setText(
 		QCoreApplication::translate("TeacherSelfRescue", "取消"));
 	QObject::connect(buttons, &QDialogButtonBox::accepted, &dialog, [&]() {
-		if (answersMatch(yearEdit->text(), roomEdit->text(), teacherEdit->text()))
+		if (answersMatch(q1Edit->text(), roomEdit->text(), teacherEdit->text()))
 		{
 			dialog.accept();
 			return;
@@ -175,13 +177,13 @@ bool TeacherSelfRescue::promptSecurityQuestions(QWidget* parent)
 							 QCoreApplication::translate("TeacherSelfRescue", "安全問題"),
 							 QCoreApplication::translate("TeacherSelfRescue",
 														 "答案不正確，無法開啟自救手冊。請再試一次。"));
-		yearEdit->selectAll();
-		yearEdit->setFocus();
+		q1Edit->selectAll();
+		q1Edit->setFocus();
 	});
 	QObject::connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
 	layout->addWidget(buttons);
 
-	yearEdit->setFocus();
+	q1Edit->setFocus();
 	return dialog.exec() == QDialog::Accepted;
 }
 

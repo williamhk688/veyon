@@ -38,14 +38,14 @@ class TeacherSelfRescue
 {
 public:
 	static QString normalizeAnswer(const QString& answer);
-	static bool answersMatch(const QString& foundingYear,
+	static bool answersMatch(const QString& itCoordinatorInitials,
 							 const QString& steamFormerRoom,
 							 const QString& firstComputerTeacher);
 
 	/*! Warning → quiz (retry until correct or cancelled) → handbook. */
 	static void run(QWidget* parent);
 
-	static constexpr auto ExpectedFoundingYear = "1969";
+	static constexpr auto ExpectedItCoordinatorInitials = "LCC";
 	static constexpr auto ExpectedSteamFormerRoom = "DAT";
 	static constexpr auto ExpectedFirstComputerTeacher = "WAN";
 
