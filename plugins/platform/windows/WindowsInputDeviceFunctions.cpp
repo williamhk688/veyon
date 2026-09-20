@@ -27,6 +27,8 @@
 #include <cstring>
 
 #include <QCoreApplication>
+#include <QMutexLocker>
+#include <QObject>
 #include <QProcess>
 #include <QThread>
 
@@ -100,44 +102,116 @@ WindowsInputDeviceFunctions::~WindowsInputDeviceFunctions()
 
 void WindowsInputDeviceFunctions::enableInputDevices()
 {
+	const auto generation = m_inputDisableGeneration.fetchAndAddOrdered(1) + 1;
+	Q_UNUSED(generation)
+
+	m_inputDevicesDisabled = false;
+
 	disableInterception();
 	restoreHIDService();
 	restorePowerScheme();
 
-	if (m_disabledInputDevices.isEmpty() == false)
+	WindowsDeviceFunctions::DeviceList devicesToEnable;
 	{
-		WindowsDeviceFunctions::setDevicesState(m_disabledInputDevices, WindowsDeviceFunctions::State::Enabled);
-		m_disabledInputDevices.clear();
-	}
-	else
-	{
-		WindowsDeviceFunctions::setDevicesState(inputDevicesToDisable(), WindowsDeviceFunctions::State::Enabled);
+		QMutexLocker locker(&m_inputDeviceMutex);
+		if (m_disabledInputDevices.isEmpty() == false)
+		{
+			devicesToEnable = m_disabledInputDevices;
+			m_disabledInputDevices.clear();
+		}
 	}
 
-	m_inputDevicesDisabled = false;
+	if (devicesToEnable.isEmpty())
+	{
+		devicesToEnable = inputDevicesToDisable();
+	}
+
+	WindowsDeviceFunctions::setDevicesState(devicesToEnable, WindowsDeviceFunctions::State::Enabled);
 }
 
 
 
 void WindowsInputDeviceFunctions::disableInputDevices()
 {
-	if( m_inputDevicesDisabled == false )
+	if (m_inputDevicesDisabled)
 	{
-		enableInterception();
+		return;
+	}
+
+	// Interception blocks keys immediately. HID/powercfg/PnP device
+	// disable can take 10–15s and must not delay the lock/demo worker.
+	enableInterception();
+	m_inputDevicesDisabled = true;
+	const auto generation = m_inputDisableGeneration.loadAcquire();
+
+	auto* thread = QThread::create([this, generation]() {
+		finishDisablingInputDevices(generation);
+	});
+	QObject::connect(thread, &QThread::finished, thread, &QThread::deleteLater);
+	thread->start();
+}
+
+
+
+void WindowsInputDeviceFunctions::finishDisablingInputDevices(int generation)
+{
+	if (m_inputDevicesDisabled == false ||
+		m_inputDisableGeneration.loadAcquire() != generation)
+	{
+		return;
+	}
+
+	if (m_interceptionContext == nullptr)
+	{
 		stopHIDService();
-		setCustomPowerScheme();
+	}
 
-		m_disabledInputDevices = inputDevicesToDisable();
-		if (m_interceptionContext == nullptr)
+	if (m_inputDevicesDisabled == false ||
+		m_inputDisableGeneration.loadAcquire() != generation)
+	{
+		return;
+	}
+
+	setCustomPowerScheme();
+
+	if (m_inputDevicesDisabled == false ||
+		m_inputDisableGeneration.loadAcquire() != generation)
+	{
+		return;
+	}
+
+	auto devices = inputDevicesToDisable();
+	if (m_interceptionContext == nullptr)
+	{
+		vWarning() << "Interception driver is not available; falling back to disabling keyboard and mouse devices";
+		devices += WindowsDeviceFunctions::findKeyboardDevices();
+		devices += WindowsDeviceFunctions::findMouseDevices();
+	}
+
+	if (m_inputDevicesDisabled == false ||
+		m_inputDisableGeneration.loadAcquire() != generation)
+	{
+		return;
+	}
+
+	{
+		QMutexLocker locker(&m_inputDeviceMutex);
+		if (m_inputDevicesDisabled == false ||
+			m_inputDisableGeneration.loadAcquire() != generation)
 		{
-			vWarning() << "Interception driver is not available; falling back to disabling keyboard and mouse devices";
-			m_disabledInputDevices += WindowsDeviceFunctions::findKeyboardDevices();
-			m_disabledInputDevices += WindowsDeviceFunctions::findMouseDevices();
+			return;
 		}
+		m_disabledInputDevices = devices;
+	}
 
-		WindowsDeviceFunctions::setDevicesState(m_disabledInputDevices, WindowsDeviceFunctions::State::Disabled);
-
-		m_inputDevicesDisabled = true;
+	if (devices.isEmpty() == false)
+	{
+		WindowsDeviceFunctions::setDevicesState(devices, WindowsDeviceFunctions::State::Disabled);
+		if (m_inputDevicesDisabled == false ||
+			m_inputDisableGeneration.loadAcquire() != generation)
+		{
+			WindowsDeviceFunctions::setDevicesState(devices, WindowsDeviceFunctions::State::Enabled);
+		}
 	}
 }
 

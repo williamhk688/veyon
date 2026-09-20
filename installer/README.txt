@@ -5,6 +5,7 @@ This build includes:
   - Classroom studio UI (navy/teal cards, Configurator rail)
   - Persistent Windows screen lock and demo lock (window + fullscreen)
   - Failsafe hotkey Ctrl+Alt+Shift+U (default password ccc24205050CYC)
+  - Faster Lock/Demo start (Interception first; HID/powercfg in the background)
   - Master: change failsafe password (security questions, then new password twice;
     no old password, so mixed student PCs can be rewritten together);
     teacher self-rescue handbook (warning + questions: LCC / DAT / WAN)

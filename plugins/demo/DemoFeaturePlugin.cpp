@@ -206,14 +206,14 @@ bool DemoFeaturePlugin::startFeature( VeyonMasterInterface& master, const Featur
 		auto demoClients = computerControlInterfaces;
 		demoClients.removeLocalHostInterfaces();
 
-		// start demo clients
+		// Start the demo server before clients so students do not wait on a
+		// 10s VNC connect timeout while the teacher port is still closed.
+		controlFeature( m_demoServerFeature.uid(), Operation::Start, {},
+						{ master.localSessionControlInterface().weakPointer() } );
+
 		controlFeature( feature == m_shareOwnScreenFullScreenFeature ? m_demoClientFullScreenFeature.uid()
 																	 : m_demoClientWindowFeature.uid(),
 						Operation::Start, {}, demoClients );
-
-		// start demo server
-		controlFeature( m_demoServerFeature.uid(), Operation::Start, {},
-						{ master.localSessionControlInterface().weakPointer() } );
 
 		return true;
 	}
@@ -249,7 +249,6 @@ bool DemoFeaturePlugin::startFeature( VeyonMasterInterface& master, const Featur
 			demoServerPort += sessionId;
 		}
 
-		// start demo clients
 		auto userDemoControlInterfaces = computerControlInterfaces;
 		userDemoControlInterfaces.removeAll( demoServerInterface );
 
@@ -264,23 +263,21 @@ bool DemoFeaturePlugin::startFeature( VeyonMasterInterface& master, const Featur
 			{ argToString(Argument::DemoServerPort), demoServerPort },
 		};
 
-		controlFeature( feature == m_shareUserScreenFullScreenFeature ? m_demoClientFullScreenFeature.uid()
-																	  : m_demoClientWindowFeature.uid(),
-						Operation::Start, demoClientArgs, userDemoControlInterfaces );
-
-		// teacher's local preview must not persist or lock input
-		auto previewArgs = demoClientArgs;
-		previewArgs.insert(argToString(Argument::LockInput), false);
-		controlFeature( m_demoClientWindowFeature.uid(), Operation::Start, previewArgs,
-						{ master.localSessionControlInterface().weakPointer() } );
-
-		// start demo server
 		controlFeature( m_demoServerFeature.uid(), Operation::Start,
 						{
 							{ argToString(Argument::VncServerPortOffset), vncServerPortOffset },
 							{ argToString(Argument::DemoServerPort), demoServerPort },
 							},
 						selectedComputerControlInterfaces );
+
+		controlFeature( feature == m_shareUserScreenFullScreenFeature ? m_demoClientFullScreenFeature.uid()
+																	  : m_demoClientWindowFeature.uid(),
+						Operation::Start, demoClientArgs, userDemoControlInterfaces );
+
+		auto previewArgs = demoClientArgs;
+		previewArgs.insert(argToString(Argument::LockInput), false);
+		controlFeature( m_demoClientWindowFeature.uid(), Operation::Start, previewArgs,
+						{ master.localSessionControlInterface().weakPointer() } );
 
 		return true;
 	}
@@ -420,12 +417,23 @@ bool DemoFeaturePlugin::handleFeatureMessage( VeyonServerInterface& server,
 			if (snapshot.lockInput)
 			{
 				PersistentDemoState::setActive(snapshot);
-				VeyonCore::platform().inputDeviceFunctions().disableInputDevices();
 			}
 		}
 #endif
 
 		server.featureWorkerManager().sendMessageToManagedSystemWorker( outboundMessage );
+
+#ifdef Q_OS_WIN
+		if (message.command<FeatureCommand>() == FeatureCommand::StartDemoClient)
+		{
+			const auto lockInputArg = outboundMessage.argument(Argument::LockInput);
+			const auto lockInput = lockInputArg.isValid() ? lockInputArg.toBool() : true;
+			if (lockInput)
+			{
+				VeyonCore::platform().inputDeviceFunctions().disableInputDevices();
+			}
+		}
+#endif
 
 		return true;
 	}

@@ -26,6 +26,9 @@
 
 #include <interception.h>
 
+#include <QAtomicInt>
+#include <QMutex>
+
 #include "PlatformInputDeviceFunctions.h"
 #include "WindowsDeviceFunctions.h"
 
@@ -64,12 +67,15 @@ private:
 	void restoreHIDService();
 	void setCustomPowerScheme();
 	void restorePowerScheme();
+	void finishDisablingInputDevices(int generation);
 
 	static bool installInterception();
 	static bool uninstallInterception();
 	static int interceptionInstaller( const QString& argument );
 
 	bool m_inputDevicesDisabled{false};
+	QAtomicInt m_inputDisableGeneration{0};
+	QMutex m_inputDeviceMutex;
 	WindowsDeviceFunctions::DeviceList m_disabledInputDevices{};
 	InterceptionContext m_interceptionContext{nullptr};
 	QThread* m_interceptionReceiveThread{nullptr};

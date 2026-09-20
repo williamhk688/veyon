@@ -158,7 +158,6 @@ bool ScreenLockFeaturePlugin::handleFeatureMessage( VeyonServerInterface& server
 		{
 #ifdef Q_OS_WIN
 			PersistentScreenLockState::setLocked(message.featureUid());
-			VeyonCore::platform().inputDeviceFunctions().disableInputDevices();
 #endif
 		}
 
@@ -170,8 +169,16 @@ bool ScreenLockFeaturePlugin::handleFeatureMessage( VeyonServerInterface& server
 		}
 #endif
 
-		// forward message to worker
+		// Start the lock worker first so the student screen changes immediately.
+		// HID/powercfg/PnP disable can take many seconds and runs in the background.
 		server.featureWorkerManager().sendMessageToManagedSystemWorker( message );
+
+#ifdef Q_OS_WIN
+		if (message.command<FeatureCommand>() == FeatureCommand::StartLock)
+		{
+			VeyonCore::platform().inputDeviceFunctions().disableInputDevices();
+		}
+#endif
 
 		return true;
 	}
