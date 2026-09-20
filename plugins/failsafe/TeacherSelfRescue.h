@@ -45,13 +45,21 @@ public:
 	/*! Warning → quiz (retry until correct or cancelled) → handbook. */
 	static void run(QWidget* parent);
 
+	/*!
+	 * Same three security questions used by the handbook. Retry until
+	 * correct or cancelled. Optional copy overrides the handbook wording
+	 * so Change Failsafe Password can reuse the quiz as its gate.
+	 */
+	static bool promptSecurityQuestions(QWidget* parent,
+										const QString& introText = {},
+										const QString& mismatchText = {});
+
 	static constexpr auto ExpectedItCoordinatorInitials = "LCC";
 	static constexpr auto ExpectedSteamFormerRoom = "DAT";
 	static constexpr auto ExpectedFirstComputerTeacher = "WAN";
 
 private:
 	static bool confirmPrivacyWarning(QWidget* parent);
-	static bool promptSecurityQuestions(QWidget* parent);
 	static void showHandbook(QWidget* parent);
 	static QString handbookHtml(int step);
 };

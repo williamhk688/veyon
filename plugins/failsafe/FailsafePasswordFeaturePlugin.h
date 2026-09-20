@@ -41,7 +41,6 @@ class FailsafePasswordFeaturePlugin : public QObject, FeatureProviderInterface, 
 public:
 	enum class Argument {
 		Password,
-		OldPassword,
 		RequestId,
 		Success
 	};
@@ -114,7 +113,7 @@ private:
 	static constexpr int AcknowledgementTimeoutSeconds = 20;
 
 	QString computerLabel(const ComputerControlInterface::Pointer& controlInterface) const;
-	bool promptPasswordChange(QWidget* parent, QString* currentPassword, QString* newPassword) const;
+	bool promptPasswordChange(QWidget* parent, QString* newPassword) const;
 	void waitForAcknowledgements(QWidget* parent, const QUuid& requestId);
 	void showResults(QWidget* parent, const PendingRequest& request) const;
 

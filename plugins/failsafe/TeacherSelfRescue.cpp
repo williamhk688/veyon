@@ -129,7 +129,9 @@ bool TeacherSelfRescue::confirmPrivacyWarning(QWidget* parent)
 
 
 
-bool TeacherSelfRescue::promptSecurityQuestions(QWidget* parent)
+bool TeacherSelfRescue::promptSecurityQuestions(QWidget* parent,
+												const QString& introText,
+												const QString& mismatchText)
 {
 	QDialog dialog(parent);
 	dialog.setObjectName(QStringLiteral("teacherSelfRescueQuiz"));
@@ -137,13 +139,19 @@ bool TeacherSelfRescue::promptSecurityQuestions(QWidget* parent)
 	dialog.setWindowModality(Qt::ApplicationModal);
 	dialog.setMinimumWidth(560);
 
+	const auto intro = introText.isEmpty()
+			? QCoreApplication::translate("TeacherSelfRescue",
+										  "請回答以下三題（忽略大小寫）。答對後才會顯示自救步驟。")
+			: introText;
+	const auto mismatch = mismatchText.isEmpty()
+			? QCoreApplication::translate("TeacherSelfRescue",
+										  "答案不正確，無法開啟自救手冊。請再試一次。")
+			: mismatchText;
+
 	auto* layout = new QVBoxLayout(&dialog);
-	auto* intro = new QLabel(
-		QCoreApplication::translate("TeacherSelfRescue",
-									"請回答以下三題（忽略大小寫）。答對後才會顯示自救步驟。"),
-		&dialog);
-	intro->setWordWrap(true);
-	layout->addWidget(intro);
+	auto* introLabel = new QLabel(intro, &dialog);
+	introLabel->setWordWrap(true);
+	layout->addWidget(introLabel);
 
 	auto* form = new QFormLayout;
 	auto* q1Edit = new QLineEdit(&dialog);
@@ -175,8 +183,7 @@ bool TeacherSelfRescue::promptSecurityQuestions(QWidget* parent)
 
 		QMessageBox::warning(&dialog,
 							 QCoreApplication::translate("TeacherSelfRescue", "安全問題"),
-							 QCoreApplication::translate("TeacherSelfRescue",
-														 "答案不正確，無法開啟自救手冊。請再試一次。"));
+							 mismatch);
 		q1Edit->selectAll();
 		q1Edit->setFocus();
 	});
@@ -237,7 +244,8 @@ void TeacherSelfRescue::showHandbook(QWidget* parent)
 QString TeacherSelfRescue::handbookHtml(int step)
 {
 	const auto hotkey = QString::fromLatin1(FailsafeUnlock::HotkeySequence);
-	const auto password = FailsafePasswordState::handbookPassword().toHtmlEscaped();
+	const auto defaultPassword = FailsafePasswordState::defaultPassword().toHtmlEscaped();
+	const auto latestPassword = FailsafePasswordState::handbookPassword().toHtmlEscaped();
 	const auto hotkeyHtml = hotkey.toHtmlEscaped();
 
 	switch (step)
@@ -265,16 +273,21 @@ QString TeacherSelfRescue::handbookHtml(int step)
 			"<ol>"
 			"<li>在<b>被鎖的那一台</b>按下：<b>%1</b></li>"
 			"<li>會出現密碼框。請輸入熱鍵解鎖密碼。</li>"
-			"<li><b>最新解鎖密碼：</b><code style=\"font-size:16px\">%2</code></li>"
+			"<li><b>預設解鎖密碼：</b><code style=\"font-size:16px\">%2</code></li>"
+			"<li><b>最新解鎖密碼：</b><code style=\"font-size:16px\">%3</code></li>"
 			"</ol>"
-			"<p>此密碼只在通過安全問題後顯示。從未用「修改解鎖密碼」成功寫入學生機時，"
-			"此處為預設值。若上次只改到部分電腦，失敗的那幾台可能仍是舊密碼。</p>"
+			"<p>兩組密碼都只在通過安全問題後顯示。"
+			"預設值是首次安裝後的出廠密碼。"
+			"最新值是本機 Master 上次成功寫入至少一台學生機後記住的密碼；"
+			"從未成功改過時，兩行會相同。</p>"
+			"<p>若上次只改到部分電腦，失敗的那幾台可能仍是預設密碼。"
+			"可用「修改解鎖密碼」一次寫入全部（答安全問題後無需舊密碼）。</p>"
 			"<p>密碼框開啟時只能輸入英數字、符號、Enter、Backspace；"
 			"Ctrl、Alt、Win、Esc 仍會被攔截，無法開工作管理員。</p>"
 			"<p>成功後會清掉本機的鎖定／演示旗標，鍵盤滑鼠應立即恢復。"
 			"回到老師 Master，若該學生仍顯示鎖定，再按一次 Unlock 對齊狀態。</p>"
 			"<p>熱鍵無效（驅動未載入、或該機沒裝 Interception）時，請改用步驟 3。</p>")
-			.arg(hotkeyHtml, password);
+			.arg(hotkeyHtml, defaultPassword, latestPassword);
 	case 3:
 		return QCoreApplication::translate(
 			"TeacherSelfRescue",

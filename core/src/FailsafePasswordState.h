@@ -47,19 +47,12 @@ public:
 	static bool setPassword(const QString& password);
 
 	/*!
-	 * Master-side form checks: current and new must be non-empty, the two
-	 * new-password fields must match, and the new value must differ from
-	 * the current one. Does not consult the stored password.
+	 * Master-side form checks: the new password must be non-empty and the
+	 * two fields must match. Does not consult any stored password, so a
+	 * bulk retry can rewrite mixed student PCs to the same value.
 	 */
-	static bool validatePasswordChangeInput(const QString& currentPassword,
-											const QString& newPassword,
+	static bool validatePasswordChangeInput(const QString& newPassword,
 											const QString& confirmation);
-
-	/*!
-	 * Student-side change: succeeds only when currentPassword matches the
-	 * stored (or default) value, then writes newPassword.
-	 */
-	static bool changePassword(const QString& currentPassword, const QString& newPassword);
 
 	/*!
 	 * Master-only cache of the last password that at least one student

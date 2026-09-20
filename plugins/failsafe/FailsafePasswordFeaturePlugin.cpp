@@ -81,12 +81,10 @@ bool FailsafePasswordFeaturePlugin::controlFeature(Feature::Uid featureUid, Oper
 	}
 
 	const auto password = arguments.value(argToString(Argument::Password)).toString();
-	const auto oldPassword = arguments.value(argToString(Argument::OldPassword)).toString();
 	const auto requestId = arguments.value(argToString(Argument::RequestId));
 
 	sendFeatureMessage(FeatureMessage{featureUid, FeatureCommand::SetPassword}
 					   .addArgument(Argument::Password, password)
-					   .addArgument(Argument::OldPassword, oldPassword)
 					   .addArgument(Argument::RequestId, requestId),
 					   computerControlInterfaces);
 	return true;
@@ -116,9 +114,17 @@ bool FailsafePasswordFeaturePlugin::startFeature(VeyonMasterInterface& master, c
 		return true;
 	}
 
-	QString currentPassword;
+	if (TeacherSelfRescue::promptSecurityQuestions(
+			master.mainWindow(),
+			tr("請回答以下三題（忽略大小寫）。答對後才可輸入新解鎖密碼。"
+			   "無需舊密碼，方便一次把尚未更新的電腦一併寫入。"),
+			tr("答案不正確，無法修改解鎖密碼。請再試一次。")) == false)
+	{
+		return true;
+	}
+
 	QString password;
-	if (promptPasswordChange(master.mainWindow(), &currentPassword, &password) == false)
+	if (promptPasswordChange(master.mainWindow(), &password) == false)
 	{
 		return true;
 	}
@@ -140,7 +146,6 @@ bool FailsafePasswordFeaturePlugin::startFeature(VeyonMasterInterface& master, c
 	controlFeature(m_changePasswordFeature.uid(), Operation::Start,
 				   {
 					   { argToString(Argument::Password), password },
-					   { argToString(Argument::OldPassword), currentPassword },
 					   { argToString(Argument::RequestId), requestId.toString(QUuid::WithoutBraces) }
 				   },
 				   computerControlInterfaces);
@@ -202,8 +207,7 @@ bool FailsafePasswordFeaturePlugin::handleFeatureMessage(VeyonServerInterface& s
 	}
 
 	const auto password = message.argument(Argument::Password).toString();
-	const auto oldPassword = message.argument(Argument::OldPassword).toString();
-	const auto success = FailsafePasswordState::changePassword(oldPassword, password);
+	const auto success = FailsafePasswordState::setPassword(password);
 
 	if (success == false)
 	{
@@ -235,7 +239,6 @@ QString FailsafePasswordFeaturePlugin::computerLabel(const ComputerControlInterf
 
 
 bool FailsafePasswordFeaturePlugin::promptPasswordChange(QWidget* parent,
-														 QString* currentPassword,
 														 QString* newPassword) const
 {
 	QDialog dialog(parent);
@@ -246,14 +249,12 @@ bool FailsafePasswordFeaturePlugin::promptPasswordChange(QWidget* parent,
 
 	auto* layout = new QVBoxLayout(&dialog);
 	auto* intro = new QLabel(
-		tr("請輸入目前解鎖密碼，並輸入兩次新密碼。學生電腦只會在目前密碼正確時才更新。"),
+		tr("請輸入兩次新解鎖密碼。學生電腦會直接寫入此密碼，不必核對舊密碼。"
+		   "若上次有部分電腦失敗，可一次全部再改。"),
 		&dialog);
 	intro->setWordWrap(true);
 	layout->addWidget(intro);
 
-	auto* currentEdit = new QLineEdit(&dialog);
-	currentEdit->setObjectName(QStringLiteral("failsafeCurrentPassword"));
-	currentEdit->setEchoMode(QLineEdit::Password);
 	auto* newEdit = new QLineEdit(&dialog);
 	newEdit->setObjectName(QStringLiteral("failsafeNewPassword"));
 	newEdit->setEchoMode(QLineEdit::Password);
@@ -262,7 +263,6 @@ bool FailsafePasswordFeaturePlugin::promptPasswordChange(QWidget* parent,
 	confirmEdit->setEchoMode(QLineEdit::Password);
 
 	auto* form = new QFormLayout;
-	form->addRow(tr("目前密碼 (Current)"), currentEdit);
 	form->addRow(tr("新密碼 (New)"), newEdit);
 	form->addRow(tr("再輸入新密碼 (Confirm)"), confirmEdit);
 	layout->addLayout(form);
@@ -271,36 +271,24 @@ bool FailsafePasswordFeaturePlugin::promptPasswordChange(QWidget* parent,
 	buttons->button(QDialogButtonBox::Ok)->setText(tr("更改"));
 	buttons->button(QDialogButtonBox::Cancel)->setText(tr("取消"));
 	QObject::connect(buttons, &QDialogButtonBox::accepted, &dialog, [&]() {
-		const auto current = currentEdit->text();
 		const auto next = newEdit->text();
 		const auto confirm = confirmEdit->text();
-		if (FailsafePasswordState::validatePasswordChangeInput(current, next, confirm) == false)
+		if (FailsafePasswordState::validatePasswordChangeInput(next, confirm) == false)
 		{
-			QString message;
-			if (current.isEmpty() || next.isEmpty())
-			{
-				message = tr("請輸入目前密碼，並輸入兩次新密碼。");
-			}
-			else if (next != confirm)
-			{
-				message = tr("兩次新密碼不一致，請再輸入一次。");
-			}
-			else
-			{
-				message = tr("新密碼不能與目前密碼相同。");
-			}
+			const auto message = next.isEmpty()
+					? tr("請輸入兩次新密碼。")
+					: tr("兩次新密碼不一致，請再輸入一次。");
 			QMessageBox::warning(&dialog, m_changePasswordFeature.displayName(), message);
 			return;
 		}
 
-		*currentPassword = current;
 		*newPassword = next;
 		dialog.accept();
 	});
 	QObject::connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
 	layout->addWidget(buttons);
 
-	currentEdit->setFocus();
+	newEdit->setFocus();
 	return dialog.exec() == QDialog::Accepted;
 }
 

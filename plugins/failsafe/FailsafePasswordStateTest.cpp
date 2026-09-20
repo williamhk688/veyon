@@ -72,25 +72,21 @@ private slots:
 
 	void validatePasswordChangeInput()
 	{
-		const auto current = QStringLiteral("old-secret");
 		const auto next = QStringLiteral("new-secret");
-		QVERIFY(FailsafePasswordState::validatePasswordChangeInput(current, next, next));
-		QVERIFY(FailsafePasswordState::validatePasswordChangeInput({}, next, next) == false);
-		QVERIFY(FailsafePasswordState::validatePasswordChangeInput(current, {}, {}) == false);
-		QVERIFY(FailsafePasswordState::validatePasswordChangeInput(current, next, QStringLiteral("other")) == false);
-		QVERIFY(FailsafePasswordState::validatePasswordChangeInput(current, current, current) == false);
+		QVERIFY(FailsafePasswordState::validatePasswordChangeInput(next, next));
+		QVERIFY(FailsafePasswordState::validatePasswordChangeInput({}, {}) == false);
+		QVERIFY(FailsafePasswordState::validatePasswordChangeInput({}, next) == false);
+		QVERIFY(FailsafePasswordState::validatePasswordChangeInput(next, QStringLiteral("other")) == false);
 	}
 
-	void changePasswordRequiresCurrentMatch()
+	void setPasswordOverwritesWithoutCurrentMatch()
 	{
-		QVERIFY(FailsafePasswordState::changePassword(QStringLiteral("wrong"),
-													  QStringLiteral("new-secret")) == false);
-		QCOMPARE(FailsafePasswordState::password(), FailsafePasswordState::defaultPassword());
+		QVERIFY(FailsafePasswordState::setPassword(QStringLiteral("first-secret")));
+		QCOMPARE(FailsafePasswordState::password(), QStringLiteral("first-secret"));
 
-		QVERIFY(FailsafePasswordState::changePassword(FailsafePasswordState::defaultPassword(),
-													  QStringLiteral("new-secret")));
-		QCOMPARE(FailsafePasswordState::password(), QStringLiteral("new-secret"));
-		QVERIFY(FailsafePasswordState::passwordMatches(QStringLiteral("new-secret")));
+		QVERIFY(FailsafePasswordState::setPassword(QStringLiteral("retry-secret")));
+		QCOMPARE(FailsafePasswordState::password(), QStringLiteral("retry-secret"));
+		QVERIFY(FailsafePasswordState::passwordMatches(QStringLiteral("retry-secret")));
 	}
 
 	void handbookShowsDefaultUntilRemembered()
