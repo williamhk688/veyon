@@ -22,16 +22,21 @@
  *
  */
 
+#include <QAbstractScrollArea>
 #include <QActionGroup>
 #include <QDir>
 #include <QProcess>
 #include <QCloseEvent>
 #include <QFileDialog>
+#include <QGuiApplication>
+#include <QLayout>
 #include <QPushButton>
 #include <QMessageBox>
-#include <QScrollBar>
+#include <QScreen>
 #include <QSettings>
+#include <QShowEvent>
 #include <QTimer>
+#include <QWindow>
 
 #include "Configuration/JsonStore.h"
 #include "Configuration/UiMapping.h"
@@ -55,11 +60,14 @@ MainWindow::MainWindow( QWidget* parent ) :
 
 	setWindowTitle(tr("Veyon Configurator %1").arg(VeyonCore::versionString()));
 
-	ui->pageSelector->setMinimumWidth(220);
+	ui->pageSelector->setMinimumWidth(196);
 	ui->pageSelector->setSpacing(6);
-	ui->configuratorSidebar->setMinimumWidth(228);
+	ui->pageSelector->setTextElideMode(Qt::ElideRight);
+	ui->configuratorSidebar->setMinimumWidth(204);
+	ui->configuratorSidebar->setMaximumWidth(260);
 
 	loadConfigurationPagePlugins();
+	constrainConfigPageLists();
 
 	// reset all widget's values to current configuration
 	reset( true );
@@ -96,8 +104,12 @@ MainWindow::MainWindow( QWidget* parent ) :
 
 	connect( ui->configPages, &QStackedWidget::currentChanged, this, &MainWindow::updateSizes );
 
-	resize( ui->pageSelector->width() + ui->generalConfigurationPage->minimumSizeHint().width(),
-			ui->generalConfigurationPage->minimumSizeHint().height() );
+	const auto* screen = QGuiApplication::primaryScreen();
+	const auto available = screen ? screen->availableGeometry() : QRect(0, 0, 1280, 800);
+	const int desiredWidth = ui->pageSelector->width() + ui->generalConfigurationPage->minimumSizeHint().width();
+	const int desiredHeight = ui->generalConfigurationPage->minimumSizeHint().height() + 120;
+	resize(qBound(720, desiredWidth, qMax(720, available.width() - 48)),
+		   qBound(520, desiredHeight, qMax(520, available.height() - 48)));
 
 	updateView();
 }
@@ -260,8 +272,20 @@ void MainWindow::aboutVeyon()
 
 void MainWindow::updateSizes()
 {
-	ui->configPages->setMinimumSize( ui->scrollArea->width() - ui->scrollArea->verticalScrollBar()->width(),
-									 ui->configPages->currentWidget()->minimumSizeHint().height() );
+	auto* page = ui->configPages->currentWidget();
+	if (page == nullptr)
+	{
+		return;
+	}
+
+	const auto contentsMargins = ui->verticalLayout->contentsMargins();
+	const int horizontalMargins = contentsMargins.left() + contentsMargins.right();
+	const int availableWidth = qMax(1, ui->scrollArea->viewport()->width() - horizontalMargins);
+
+	ui->configPages->setMinimumWidth(availableWidth);
+	ui->configPages->setMaximumWidth(availableWidth);
+	ui->configPages->setMinimumHeight(page->minimumSizeHint().height());
+	ui->scrollAreaWidgetContents->setMaximumWidth(ui->scrollArea->viewport()->width());
 }
 
 
@@ -365,10 +389,13 @@ void MainWindow::loadConfigurationPagePlugins()
 		}
 	}
 
-	// adjust minimum size for the navigation rail
-	const auto selectorWidth = qMax(220, ui->pageSelector->sizeHintForColumn(0) + 3 * ui->pageSelector->spacing());
+	// keep the navigation rail compact so the content column stays visible
+	const auto selectorWidth = qBound(196,
+									  ui->pageSelector->sizeHintForColumn(0) + 3 * ui->pageSelector->spacing(),
+									  240);
 	ui->pageSelector->setMinimumSize( selectorWidth, ui->pageSelector->minimumHeight() );
 	ui->configuratorSidebar->setMinimumWidth( selectorWidth + 8 );
+	ui->configuratorSidebar->setMaximumWidth(qMax(selectorWidth + 8, 260));
 }
 
 
@@ -388,4 +415,50 @@ void MainWindow::closeEvent( QCloseEvent *closeEvent )
 
 	closeEvent->accept();
 	QMainWindow::closeEvent( closeEvent );
+}
+
+
+
+void MainWindow::showEvent(QShowEvent* event)
+{
+	QMainWindow::showEvent(event);
+	fitWindowToScreen();
+	QTimer::singleShot(0, this, &MainWindow::updateSizes);
+}
+
+
+
+void MainWindow::constrainConfigPageLists()
+{
+	const auto areas = ui->configPages->findChildren<QAbstractScrollArea *>();
+	for (auto* area : areas)
+	{
+		area->setSizeAdjustPolicy(QAbstractScrollArea::AdjustIgnored);
+	}
+}
+
+
+
+void MainWindow::fitWindowToScreen()
+{
+	const auto* screen = windowHandle() && windowHandle()->screen()
+			? windowHandle()->screen()
+			: QGuiApplication::primaryScreen();
+	if (screen == nullptr)
+	{
+		return;
+	}
+
+	const auto available = screen->availableGeometry();
+	const int maxWidth = qMax(720, available.width() - 24);
+	const int maxHeight = qMax(520, available.height() - 24);
+	if (width() > maxWidth || height() > maxHeight)
+	{
+		resize(qMin(width(), maxWidth), qMin(height(), maxHeight));
+	}
+
+	if (frameGeometry().right() > available.right() || frameGeometry().bottom() > available.bottom())
+	{
+		move(available.x() + 12, available.y() + 12);
+	}
 }

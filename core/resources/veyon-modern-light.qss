@@ -332,8 +332,8 @@ QListWidget#pageSelector {
 	background-color: #ffffff;
 	border: none;
 	border-radius: 0;
-	padding: 8px 10px 16px 10px;
-	min-width: 220px;
+	padding: 8px 8px 16px 8px;
+	min-width: 196px;
 	outline: 0;
 }
 
@@ -362,6 +362,14 @@ QWidget#configuratorFooter {
 QScrollArea {
 	background-color: transparent;
 	border: none;
+}
+
+QScrollArea#scrollArea QGroupBox {
+	padding: 12px 10px 10px 10px;
+}
+
+QScrollArea#scrollArea QPushButton {
+	padding: 6px 12px;
 }
 
 QScrollBar:vertical {

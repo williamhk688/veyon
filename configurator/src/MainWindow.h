@@ -25,6 +25,7 @@
 #pragma once
 
 #include <QMainWindow>
+#include <QShowEvent>
 
 class QAbstractButton;
 
@@ -44,6 +45,7 @@ public:
 
 protected:
 	void resizeEvent( QResizeEvent* event ) override;
+	void showEvent(QShowEvent* event) override;
 
 private Q_SLOTS:
 	void configurationChanged();
@@ -61,6 +63,8 @@ private:
 	void switchToAdvancedView();
 
 	void loadConfigurationPagePlugins();
+	void constrainConfigPageLists();
+	void fitWindowToScreen();
 
 	void closeEvent( QCloseEvent *closeEvent ) override;
 
