@@ -105,7 +105,7 @@ bool TeacherSelfRescue::confirmPrivacyWarning(QWidget* parent)
 		"<p><b>開啟前請確認：</b></p>"
 		"<ul>"
 		"<li>課室裡<b>沒有同學在場</b></li>"
-		"<li>Veyon Master <b>沒有正在投屏／演示</b>（若有，請先按 Stop Demo）</li>"
+		"<li>Master <b>沒有正在投屏／演示</b>（有的話請先 Stop Demo）</li>"
 		"</ul>"
 		"<p>此內容只供教師閱讀，請勿讓學生看見螢幕，亦請勿影印張貼。</p>"
 		"<p>Before opening, confirm no students are present and that demo / "
@@ -133,7 +133,7 @@ bool TeacherSelfRescue::promptSecurityQuestions(QWidget* parent)
 	dialog.setObjectName(QStringLiteral("teacherSelfRescueQuiz"));
 	dialog.setWindowTitle(QCoreApplication::translate("TeacherSelfRescue", "安全問題"));
 	dialog.setWindowModality(Qt::ApplicationModal);
-	dialog.setMinimumWidth(480);
+	dialog.setMinimumWidth(560);
 
 	auto* layout = new QVBoxLayout(&dialog);
 	auto* intro = new QLabel(
