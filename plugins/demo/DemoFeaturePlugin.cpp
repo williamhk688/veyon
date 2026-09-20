@@ -22,6 +22,7 @@
  *
  */
 
+#include <QCoreApplication>
 #include <QMessageBox>
 #include <QScreen>
 #include <QTimer>
@@ -35,6 +36,7 @@
 #include "DemoConfigurationPage.h"
 #include "DemoFeaturePlugin.h"
 #include "DemoServer.h"
+#include "FailsafePasswordState.h"
 #include "FeatureWorkerManager.h"
 #include "HostAddress.h"
 #include "Logger.h"
@@ -45,6 +47,7 @@
 #include "VeyonConfiguration.h"
 #include "VeyonMasterInterface.h"
 #include "VeyonServerInterface.h"
+#include "VeyonWorkerInterface.h"
 
 
 DemoFeaturePlugin::DemoFeaturePlugin( QObject* parent ) :
@@ -434,7 +437,6 @@ bool DemoFeaturePlugin::handleFeatureMessage( VeyonServerInterface& server,
 
 bool DemoFeaturePlugin::handleFeatureMessage( VeyonWorkerInterface& worker, const FeatureMessage& message )
 {
-	Q_UNUSED(worker)
 
 	if( message.featureUid() == m_demoServerFeature.uid() )
 	{
@@ -463,7 +465,9 @@ bool DemoFeaturePlugin::handleFeatureMessage( VeyonWorkerInterface& worker, cons
 
 			return true;
 
-		default:
+		case FeatureCommand::StartDemoClient:
+		case FeatureCommand::StopDemoClient:
+		case FeatureCommand::FailsafeUnlock:
 			break;
 		}
 	}
@@ -484,6 +488,16 @@ bool DemoFeaturePlugin::handleFeatureMessage( VeyonWorkerInterface& worker, cons
 
 				vDebug() << "connecting with master" << demoServerHost;
 				m_demoClient = new DemoClient( demoServerHost, demoServerPort, isFullscreenDemo, viewport );
+				connect(m_demoClient, &DemoClient::failsafeUnlocked, this,
+						[this, &worker, featureUid = message.featureUid()]() {
+					worker.sendFeatureMessageReply(FeatureMessage{featureUid, FeatureCommand::FailsafeUnlock});
+					if (m_demoClient)
+					{
+						m_demoClient->deleteLater();
+						m_demoClient = nullptr;
+					}
+					QTimer::singleShot(0, []() { QCoreApplication::quit(); });
+				}, Qt::QueuedConnection);
 			}
 			return true;
 
@@ -495,9 +509,31 @@ bool DemoFeaturePlugin::handleFeatureMessage( VeyonWorkerInterface& worker, cons
 
 			return true;
 
-		default:
+		case FeatureCommand::StartDemoServer:
+		case FeatureCommand::StopDemoServer:
+		case FeatureCommand::FailsafeUnlock:
 			break;
 		}
+	}
+
+	return false;
+}
+
+
+
+bool DemoFeaturePlugin::handleFeatureMessageFromWorker(VeyonServerInterface& server, const FeatureMessage& message)
+{
+	Q_UNUSED(server)
+
+	if ((message.featureUid() == m_demoClientFullScreenFeature.uid() ||
+		 message.featureUid() == m_demoClientWindowFeature.uid()) &&
+		message.command<FeatureCommand>() == FeatureCommand::FailsafeUnlock)
+	{
+#ifdef Q_OS_WIN
+		FailsafePasswordState::clearPersistedInputLocks();
+		VeyonCore::platform().inputDeviceFunctions().enableInputDevices();
+#endif
+		return true;
 	}
 
 	return false;

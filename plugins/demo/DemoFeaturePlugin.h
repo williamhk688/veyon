@@ -114,6 +114,8 @@ public:
 
 	bool handleFeatureMessage( VeyonWorkerInterface& worker, const FeatureMessage& message ) override;
 
+	bool handleFeatureMessageFromWorker(VeyonServerInterface& server, const FeatureMessage& message) override;
+
 	bool isFeatureActive(VeyonServerInterface& server, Feature::Uid featureUid) const override;
 
 	void initializeServer(VeyonServerInterface& server) override;
@@ -146,7 +148,8 @@ private:
 		StartDemoServer,
 		StopDemoServer,
 		StartDemoClient,
-		StopDemoClient
+		StopDemoClient,
+		FailsafeUnlock
 	};
 
 	const Feature m_demoFeature;

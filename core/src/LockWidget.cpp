@@ -22,12 +22,15 @@
  */
 
 #include "LockWidget.h"
+#include "FailsafeUnlock.h"
 #include "PlatformCoreFunctions.h"
 #include "PlatformInputDeviceFunctions.h"
 
 #include <QApplication>
+#include <QKeyEvent>
 #include <QPainter>
 #include <QScreen>
+#include <QShortcut>
 #include <QWindow>
 
 
@@ -81,6 +84,12 @@ LockWidget::LockWidget( Mode mode, const QPixmap& background, QWidget* parent ) 
 	QGuiApplication::setOverrideCursor( Qt::BlankCursor );
 
 	QCursor::setPos( mapToGlobal( QPoint( 0, 0 ) ) );
+
+	auto* failsafeShortcut = new QShortcut(QKeySequence(QLatin1String(FailsafeUnlock::HotkeySequence)), this);
+	failsafeShortcut->setContext(Qt::ApplicationShortcut);
+	connect(failsafeShortcut, &QShortcut::activated, this, &LockWidget::promptFailsafeUnlock);
+	connect(&FailsafeHotkeyMonitor::instance(), &FailsafeHotkeyMonitor::hotkeyPressed,
+			this, &LockWidget::promptFailsafeUnlock);
 }
 
 
@@ -116,4 +125,54 @@ void LockWidget::paintEvent( QPaintEvent* event )
 	default:
 		break;
 	}
+}
+
+
+
+void LockWidget::keyPressEvent( QKeyEvent* event )
+{
+	if (FailsafeHotkeyMonitor::isUnlockHotkey(event))
+	{
+		promptFailsafeUnlock();
+		return;
+	}
+
+	QWidget::keyPressEvent(event);
+}
+
+
+
+void LockWidget::promptFailsafeUnlock()
+{
+	if (m_failsafePromptOpen)
+	{
+		return;
+	}
+
+	m_failsafePromptOpen = true;
+	releaseKeyboard();
+	releaseMouse();
+	QGuiApplication::restoreOverrideCursor();
+	unsetCursor();
+
+	if (FailsafeUnlock::prompt(this))
+	{
+		Q_EMIT failsafeUnlocked();
+		return;
+	}
+
+	restoreInputGrab();
+	m_failsafePromptOpen = false;
+}
+
+
+
+void LockWidget::restoreInputGrab()
+{
+	setCursor( Qt::BlankCursor );
+	QGuiApplication::setOverrideCursor( Qt::BlankCursor );
+	grabMouse();
+	grabKeyboard();
+	setFocus();
+	VeyonCore::platform().coreFunctions().raiseWindow(this, true);
 }

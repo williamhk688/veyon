@@ -43,11 +43,17 @@ public:
 	explicit LockWidget( Mode mode, const QPixmap& background = QPixmap(), QWidget* parent = nullptr );
 	~LockWidget() override;
 
+Q_SIGNALS:
+	void failsafeUnlocked();
 
 private:
 	void paintEvent( QPaintEvent * ) override;
+	void keyPressEvent( QKeyEvent* event ) override;
+	void promptFailsafeUnlock();
+	void restoreInputGrab();
 
 	QPixmap m_background;
 	Mode m_mode;
+	bool m_failsafePromptOpen{false};
 
 } ;

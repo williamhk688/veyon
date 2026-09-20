@@ -26,8 +26,10 @@
 
 #include <QCoreApplication>
 #include <QProcess>
+#include <QThread>
 
 #include "ConfigurationManager.h"
+#include "FailsafeUnlock.h"
 #include "Logger.h"
 #include "PlatformServiceFunctions.h"
 #include "ProcessHelper.h"
@@ -183,6 +185,8 @@ void WindowsInputDeviceFunctions::enableInterception()
 {
 	if( WindowsPlatformConfiguration( &VeyonCore::config() ).useInterceptionDriver() )
 	{
+		FailsafeHotkeyMonitor::instance();
+
 		m_interceptionContext = interception_create_context();
 
 		if( m_interceptionContext )
@@ -190,6 +194,7 @@ void WindowsInputDeviceFunctions::enableInterception()
 			interception_set_filter(m_interceptionContext,
 									interception_is_any,
 									InterceptionFilter(INTERCEPTION_FILTER_KEY_ALL) | InterceptionFilter(INTERCEPTION_FILTER_MOUSE_ALL));
+			startInterceptionReceiveThread();
 		}
 		else
 		{
@@ -202,11 +207,126 @@ void WindowsInputDeviceFunctions::enableInterception()
 
 void WindowsInputDeviceFunctions::disableInterception()
 {
+	stopInterceptionReceiveThread();
+
 	if( m_interceptionContext )
 	{
 		interception_destroy_context( m_interceptionContext );
-
 		m_interceptionContext = nullptr;
+	}
+}
+
+
+
+void WindowsInputDeviceFunctions::startInterceptionReceiveThread()
+{
+	if (m_interceptionReceiveThread)
+	{
+		m_interceptionReceiveThread->requestInterruption();
+		m_interceptionReceiveThread->wait();
+		delete m_interceptionReceiveThread;
+		m_interceptionReceiveThread = nullptr;
+	}
+
+	if (m_interceptionContext == nullptr)
+	{
+		return;
+	}
+
+	m_interceptionReceiveThread = QThread::create([this]() {
+		runInterceptionReceiveLoop();
+	});
+	m_interceptionReceiveThread->start();
+}
+
+
+
+void WindowsInputDeviceFunctions::stopInterceptionReceiveThread()
+{
+	if (m_interceptionReceiveThread == nullptr)
+	{
+		return;
+	}
+
+	m_interceptionReceiveThread->requestInterruption();
+	m_interceptionReceiveThread->wait();
+	delete m_interceptionReceiveThread;
+	m_interceptionReceiveThread = nullptr;
+}
+
+
+
+void WindowsInputDeviceFunctions::runInterceptionReceiveLoop()
+{
+	static constexpr unsigned short ScanControl = 0x1D;
+	static constexpr unsigned short ScanAlt = 0x38;
+	static constexpr unsigned short ScanLeftShift = 0x2A;
+	static constexpr unsigned short ScanRightShift = 0x36;
+	static constexpr unsigned short ScanU = 0x16;
+
+	bool controlDown = false;
+	bool altDown = false;
+	bool shiftDown = false;
+	bool hotkeyArmed = true;
+
+	while (m_interceptionReceiveThread &&
+		   m_interceptionReceiveThread->isInterruptionRequested() == false &&
+		   m_interceptionContext)
+	{
+		const auto device = interception_wait_with_timeout(m_interceptionContext, 50);
+		if (interception_is_invalid(device))
+		{
+			continue;
+		}
+
+		InterceptionStroke stroke{};
+		if (interception_receive(m_interceptionContext, device, &stroke, 1) <= 0)
+		{
+			break;
+		}
+
+		if (FailsafeHotkeyMonitor::instance().passwordPromptPassthrough())
+		{
+			interception_send(m_interceptionContext, device, &stroke, 1);
+			continue;
+		}
+
+		if (interception_is_keyboard(device) == false)
+		{
+			continue;
+		}
+
+		const auto* keyStroke = reinterpret_cast<const InterceptionKeyStroke *>(&stroke);
+		const bool isUp = (keyStroke->state & INTERCEPTION_KEY_UP) != 0;
+
+		switch (keyStroke->code)
+		{
+		case ScanControl:
+			controlDown = (isUp == false);
+			break;
+		case ScanAlt:
+			altDown = (isUp == false);
+			break;
+		case ScanLeftShift:
+		case ScanRightShift:
+			shiftDown = (isUp == false);
+			break;
+		default:
+			break;
+		}
+
+		if (keyStroke->code == ScanU)
+		{
+			if (isUp)
+			{
+				hotkeyArmed = true;
+			}
+			else if (hotkeyArmed && controlDown && altDown && shiftDown)
+			{
+				hotkeyArmed = false;
+				FailsafeHotkeyMonitor::instance().notifyHotkeyPressed();
+			}
+		}
 	}
 }
 

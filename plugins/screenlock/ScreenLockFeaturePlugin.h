@@ -82,6 +82,8 @@ public:
 
 	bool handleFeatureMessage( VeyonWorkerInterface& worker, const FeatureMessage& message ) override;
 
+	bool handleFeatureMessageFromWorker(VeyonServerInterface& server, const FeatureMessage& message) override;
+
 	bool isFeatureActive( VeyonServerInterface& server, Feature::Uid featureUid ) const override;
 
 	void initializeServer(VeyonServerInterface& server) override;
@@ -90,7 +92,8 @@ private:
 	enum class FeatureCommand
 	{
 		StartLock,
-		StopLock
+		StopLock,
+		FailsafeUnlock
 	};
 
 #ifdef Q_OS_WIN

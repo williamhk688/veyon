@@ -29,6 +29,8 @@
 #include "PlatformInputDeviceFunctions.h"
 #include "WindowsDeviceFunctions.h"
 
+class QThread;
+
 // clazy:excludeall=copyable-polymorphic
 
 class WindowsInputDeviceFunctions : public PlatformInputDeviceFunctions
@@ -54,6 +56,9 @@ private:
 
 	void enableInterception();
 	void disableInterception();
+	void startInterceptionReceiveThread();
+	void stopInterceptionReceiveThread();
+	void runInterceptionReceiveLoop();
 	void initHIDServiceStatus();
 	void stopHIDService();
 	void restoreHIDService();
@@ -67,6 +72,7 @@ private:
 	bool m_inputDevicesDisabled{false};
 	WindowsDeviceFunctions::DeviceList m_disabledInputDevices{};
 	InterceptionContext m_interceptionContext{nullptr};
+	QThread* m_interceptionReceiveThread{nullptr};
 	QString m_hidServiceName{QStringLiteral("hidserv")};
 	bool m_hidServiceStatusInitialized{false};
 	bool m_hidServiceActivated{false};
