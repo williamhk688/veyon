@@ -148,6 +148,10 @@ bool FailsafePasswordFeaturePlugin::startFeature(VeyonMasterInterface& master, c
 	waitForAcknowledgements(master.mainWindow(), requestId);
 
 	const auto finishedRequest = m_pendingRequests.take(requestId);
+	if (finishedRequest.succeeded.isEmpty() == false)
+	{
+		FailsafePasswordState::rememberPassword(password);
+	}
 	showResults(master.mainWindow(), finishedRequest);
 	return true;
 }

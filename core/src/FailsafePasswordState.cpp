@@ -37,6 +37,7 @@
 
 
 static const auto PasswordKey = QStringLiteral("FailsafePassword");
+static const auto LastKnownPasswordKey = QStringLiteral("LastKnownPassword");
 static const auto PasswordFileEnvVar = QByteArrayLiteral("VEYON_FAILSAFE_PASSWORD_FILE");
 static const auto ScreenLockStateFileEnvVar = QByteArrayLiteral("VEYON_SCREENLOCK_STATE_FILE");
 static const auto DemoStateFileEnvVar = QByteArrayLiteral("VEYON_DEMO_STATE_FILE");
@@ -80,6 +81,48 @@ static bool writeToTestStateFile(const QString& password)
 	QSettings settings(path, QSettings::IniFormat);
 	settings.setFallbacksEnabled(false);
 	settings.setValue(PasswordKey, password);
+	settings.sync();
+	return settings.status() == QSettings::NoError;
+}
+
+
+
+static QString readLastKnownPassword()
+{
+	const auto path = passwordTestFilePath();
+	if (path.isEmpty() == false)
+	{
+		QSettings settings(path, QSettings::IniFormat);
+		settings.setFallbacksEnabled(false);
+		return settings.value(LastKnownPasswordKey).toString();
+	}
+
+	QSettings settings(QSettings::UserScope,
+					   QStringLiteral("Veyon Solutions"),
+					   QStringLiteral("VeyonFailsafe"));
+	settings.setFallbacksEnabled(false);
+	return settings.value(LastKnownPasswordKey).toString();
+}
+
+
+
+static bool writeLastKnownPassword(const QString& password)
+{
+	const auto path = passwordTestFilePath();
+	if (path.isEmpty() == false)
+	{
+		QSettings settings(path, QSettings::IniFormat);
+		settings.setFallbacksEnabled(false);
+		settings.setValue(LastKnownPasswordKey, password);
+		settings.sync();
+		return settings.status() == QSettings::NoError;
+	}
+
+	QSettings settings(QSettings::UserScope,
+					   QStringLiteral("Veyon Solutions"),
+					   QStringLiteral("VeyonFailsafe"));
+	settings.setFallbacksEnabled(false);
+	settings.setValue(LastKnownPasswordKey, password);
 	settings.sync();
 	return settings.status() == QSettings::NoError;
 }
@@ -250,6 +293,31 @@ bool FailsafePasswordState::changePassword(const QString& currentPassword, const
 	}
 
 	return setPassword(newPassword);
+}
+
+
+
+bool FailsafePasswordState::rememberPassword(const QString& password)
+{
+	if (password.isEmpty())
+	{
+		return false;
+	}
+
+	return writeLastKnownPassword(password);
+}
+
+
+
+QString FailsafePasswordState::handbookPassword()
+{
+	const auto remembered = readLastKnownPassword();
+	if (remembered.isEmpty() == false)
+	{
+		return remembered;
+	}
+
+	return password();
 }
 
 

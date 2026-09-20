@@ -62,6 +62,14 @@ public:
 	static bool changePassword(const QString& currentPassword, const QString& newPassword);
 
 	/*!
+	 * Master-only cache of the last password that at least one student
+	 * stored successfully. Used by the gated self-rescue handbook. Does not
+	 * replace HKLM on student PCs.
+	 */
+	static bool rememberPassword(const QString& password);
+	static QString handbookPassword();
+
+	/*!
 	 * Deletes the persisted screen-lock and demo input-lock flags so the
 	 * Windows service registry watch re-enables input after a local unlock.
 	 */

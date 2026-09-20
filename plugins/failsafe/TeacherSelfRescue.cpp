@@ -237,7 +237,7 @@ void TeacherSelfRescue::showHandbook(QWidget* parent)
 QString TeacherSelfRescue::handbookHtml(int step)
 {
 	const auto hotkey = QString::fromLatin1(FailsafeUnlock::HotkeySequence);
-	const auto password = FailsafePasswordState::defaultPassword().toHtmlEscaped();
+	const auto password = FailsafePasswordState::handbookPassword().toHtmlEscaped();
 	const auto hotkeyHtml = hotkey.toHtmlEscaped();
 
 	switch (step)
@@ -265,9 +265,10 @@ QString TeacherSelfRescue::handbookHtml(int step)
 			"<ol>"
 			"<li>在<b>被鎖的那一台</b>按下：<b>%1</b></li>"
 			"<li>會出現密碼框。請輸入熱鍵解鎖密碼。</li>"
-			"<li><b>預設密碼：</b><code style=\"font-size:16px\">%2</code></li>"
+			"<li><b>最新解鎖密碼：</b><code style=\"font-size:16px\">%2</code></li>"
 			"</ol>"
-			"<p>若老師曾在 Master 用「修改解鎖密碼」把新密碼派到學生機，請改用新密碼，不要再用預設值。</p>"
+			"<p>此密碼只在通過安全問題後顯示。從未用「修改解鎖密碼」成功寫入學生機時，"
+			"此處為預設值。若上次只改到部分電腦，失敗的那幾台可能仍是舊密碼。</p>"
 			"<p>密碼框開啟時只能輸入英數字、符號、Enter、Backspace；"
 			"Ctrl、Alt、Win、Esc 仍會被攔截，無法開工作管理員。</p>"
 			"<p>成功後會清掉本機的鎖定／演示旗標，鍵盤滑鼠應立即恢復。"

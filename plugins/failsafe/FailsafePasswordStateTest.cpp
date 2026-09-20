@@ -93,6 +93,18 @@ private slots:
 		QVERIFY(FailsafePasswordState::passwordMatches(QStringLiteral("new-secret")));
 	}
 
+	void handbookShowsDefaultUntilRemembered()
+	{
+		QCOMPARE(FailsafePasswordState::handbookPassword(), FailsafePasswordState::defaultPassword());
+
+		const auto latest = QStringLiteral("latest-classroom-secret");
+		QVERIFY(FailsafePasswordState::rememberPassword(latest));
+		QCOMPARE(FailsafePasswordState::handbookPassword(), latest);
+		QCOMPARE(FailsafePasswordState::password(), FailsafePasswordState::defaultPassword());
+		QVERIFY(FailsafePasswordState::rememberPassword({}) == false);
+		QCOMPARE(FailsafePasswordState::handbookPassword(), latest);
+	}
+
 	void clearRemovesPersistedLocks()
 	{
 		QFile lockFile(m_lockFile);
