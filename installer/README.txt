@@ -3,23 +3,25 @@ Veyon 4.11.2 (modified) — Windows 64-bit installer
 
 This build includes:
   - Classroom studio UI (navy/teal cards, Configurator rail)
-  - Persistent Windows screen lock
-  - Persistent Windows demo lock (window + fullscreen)
+  - Persistent Windows screen lock and demo lock (window + fullscreen)
+  - Failsafe hotkey Ctrl+Alt+Shift+U (default password ccc24205050CYC)
+  - Master: change failsafe password; teacher self-rescue handbook
+    (warning + 3 security questions: LCC / DAT / WAN)
 
-Download this file from GitHub:
+Download this file from GitHub (this branch):
 
   installer/veyon_4_11_2_win64_modified_setup.exe
 
-Direct download (this branch):
+Direct download:
 
-  https://github.com/williamhk688/veyon/raw/cursor/modern-ui-persistent-lock-ecca/installer/veyon_4_11_2_win64_modified_setup.exe
+  https://github.com/williamhk688/veyon/raw/feature-password-backdoor/installer/veyon_4_11_2_win64_modified_setup.exe
 
 Or open the file on GitHub and click "Download raw file":
 
-  https://github.com/williamhk688/veyon/blob/cursor/modern-ui-persistent-lock-ecca/installer/veyon_4_11_2_win64_modified_setup.exe
+  https://github.com/williamhk688/veyon/blob/feature-password-backdoor/installer/veyon_4_11_2_win64_modified_setup.exe
 
 SHA-256:
-  ac523ac686a4cee4361ed72336a02c2f96c3b28a43ab262c29f42f6ee1bbe8aa
+  c8f3811494033fca7253ca3a1651180accb51bcb245f2b06a4c4973a0fafe8ee
 
 This is an unofficial MinGW cross-build of this fork (Qt 6.7.3),
 not an official Veyon Solutions installer. Test on one student PC first.
@@ -38,15 +40,17 @@ Install
    add student computers in Master.
 
 Both teacher and student machines MUST run this modified build.
-The persistent lock and demo live in the student Veyon Service.
+The persistent lock, demo lock, and failsafe hotkey live on the student PC.
+The self-rescue handbook is in Veyon Master (teacher PC only).
 
 Teacher Safe Mode recovery guide
 --------------------------------
+The same steps are also in Master → 教師自救手冊 (after the security questions).
+
 Direct download:
 
-  https://github.com/williamhk688/veyon/raw/cursor/modern-ui-persistent-lock-ecca/installer/teacher-lock-recovery.docx
+  https://github.com/williamhk688/veyon/raw/feature-password-backdoor/installer/teacher-lock-recovery.docx
 
 Same file, Chinese filename:
 
   installer/老師專用-鎖定自救說明.docx
-
