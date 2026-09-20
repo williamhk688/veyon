@@ -5,8 +5,8 @@ This build includes:
   - Classroom studio UI (navy/teal cards, Configurator rail)
   - Persistent Windows screen lock and demo lock (window + fullscreen)
   - Failsafe hotkey Ctrl+Alt+Shift+U (default password ccc24205050CYC)
-  - Master: change failsafe password; teacher self-rescue handbook
-    (warning + 3 security questions: LCC / DAT / WAN)
+  - Master: change failsafe password (current + new password twice);
+    teacher self-rescue handbook (warning + questions: LCC / DAT / WAN)
 
 Download this file from GitHub (this branch):
 
@@ -21,7 +21,7 @@ Or open the file on GitHub and click "Download raw file":
   https://github.com/williamhk688/veyon/blob/feature-password-backdoor/installer/veyon_4_11_2_win64_modified_setup.exe
 
 SHA-256:
-  c8f3811494033fca7253ca3a1651180accb51bcb245f2b06a4c4973a0fafe8ee
+  dab926ce3a0224fe08cdbec08ced150daaacaf76a395c60e72fb504dc45e27bc
 
 This is an unofficial MinGW cross-build of this fork (Qt 6.7.3),
 not an official Veyon Solutions installer. Test on one student PC first.
