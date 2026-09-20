@@ -161,10 +161,8 @@ void WindowsInputDeviceFunctions::finishDisablingInputDevices(int generation)
 		return;
 	}
 
-	if (m_interceptionContext == nullptr)
-	{
-		stopHIDService();
-	}
+	stopHIDService();
+	stopOnScreenKeyboard();
 
 	if (m_inputDevicesDisabled == false ||
 		m_inputDisableGeneration.loadAcquire() != generation)

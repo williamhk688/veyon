@@ -417,23 +417,12 @@ bool DemoFeaturePlugin::handleFeatureMessage( VeyonServerInterface& server,
 			if (snapshot.lockInput)
 			{
 				PersistentDemoState::setActive(snapshot);
+				VeyonCore::platform().inputDeviceFunctions().disableInputDevices();
 			}
 		}
 #endif
 
 		server.featureWorkerManager().sendMessageToManagedSystemWorker( outboundMessage );
-
-#ifdef Q_OS_WIN
-		if (message.command<FeatureCommand>() == FeatureCommand::StartDemoClient)
-		{
-			const auto lockInputArg = outboundMessage.argument(Argument::LockInput);
-			const auto lockInput = lockInputArg.isValid() ? lockInputArg.toBool() : true;
-			if (lockInput)
-			{
-				VeyonCore::platform().inputDeviceFunctions().disableInputDevices();
-			}
-		}
-#endif
 
 		return true;
 	}
