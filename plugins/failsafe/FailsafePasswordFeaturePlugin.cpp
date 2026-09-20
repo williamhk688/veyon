@@ -40,6 +40,7 @@
 #include "FailsafePasswordFeaturePlugin.h"
 #include "FailsafePasswordState.h"
 #include "Logger.h"
+#include "TeacherSelfRescue.h"
 #include "VeyonMasterInterface.h"
 #include "VeyonServerInterface.h"
 #include "VncConnection.h"
@@ -55,7 +56,15 @@ FailsafePasswordFeaturePlugin::FailsafePasswordFeaturePlugin(QObject* parent) :
 							tr("Send a new failsafe unlock password to the selected computers "
 							   "and report which clients stored it successfully."),
 							QStringLiteral(":/core/document-edit.png")),
-	m_features({ m_changePasswordFeature })
+	m_selfRescueFeature(QStringLiteral("TeacherSelfRescue"),
+						Feature::Flag::Action | Feature::Flag::Master,
+						Feature::Uid(QStringLiteral("8d1f6e2a-4c9b-4a73-b5e0-1c7f9a2d6b48")),
+						Feature::Uid(),
+						tr("教師自救手冊 (Teacher Self-Rescue)"), {},
+						tr("Open the teacher self-rescue handbook after a privacy warning "
+						   "and three security questions. Does not send anything to students."),
+						QStringLiteral(":/core/help-about.png")),
+	m_features({ m_changePasswordFeature, m_selfRescueFeature })
 {
 }
 
@@ -85,6 +94,12 @@ bool FailsafePasswordFeaturePlugin::controlFeature(Feature::Uid featureUid, Oper
 bool FailsafePasswordFeaturePlugin::startFeature(VeyonMasterInterface& master, const Feature& feature,
 												 const ComputerControlInterfaceList& computerControlInterfaces)
 {
+	if (feature.uid() == m_selfRescueFeature.uid())
+	{
+		TeacherSelfRescue::run(master.mainWindow());
+		return true;
+	}
+
 	if (feature.uid() != m_changePasswordFeature.uid())
 	{
 		return false;

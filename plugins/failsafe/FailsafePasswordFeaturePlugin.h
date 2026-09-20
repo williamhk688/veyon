@@ -66,7 +66,7 @@ public:
 
 	QString description() const override
 	{
-		return tr("Distribute a failsafe unlock password to client computers");
+		return tr("Failsafe unlock password distribution and teacher self-rescue handbook");
 	}
 
 	QString vendor() const override
@@ -117,6 +117,7 @@ private:
 	void showResults(QWidget* parent, const PendingRequest& request) const;
 
 	const Feature m_changePasswordFeature;
+	const Feature m_selfRescueFeature;
 	const FeatureList m_features;
 	QMap<QUuid, PendingRequest> m_pendingRequests;
 

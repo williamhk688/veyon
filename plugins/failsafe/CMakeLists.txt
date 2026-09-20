@@ -5,6 +5,8 @@ build_veyon_plugin(failsafe
 	SOURCES
 	FailsafePasswordFeaturePlugin.cpp
 	FailsafePasswordFeaturePlugin.h
+	TeacherSelfRescue.cpp
+	TeacherSelfRescue.h
 	)
 
 if(WITH_TESTS)
@@ -26,5 +28,17 @@ if(WITH_TESTS)
 		${CMAKE_CURRENT_BINARY_DIR})
 	target_link_libraries(FailsafePasswordKeyFilterTest PRIVATE
 		Qt${QT_MAJOR_VERSION}::Test
+		veyon-core)
+
+	add_executable(TeacherSelfRescueTest
+		TeacherSelfRescueTest.cpp
+		TeacherSelfRescue.cpp)
+	add_test(NAME TeacherSelfRescueTest COMMAND TeacherSelfRescueTest)
+	target_include_directories(TeacherSelfRescueTest PRIVATE
+		${CMAKE_CURRENT_SOURCE_DIR}
+		${CMAKE_CURRENT_BINARY_DIR})
+	target_link_libraries(TeacherSelfRescueTest PRIVATE
+		Qt${QT_MAJOR_VERSION}::Test
+		Qt${QT_MAJOR_VERSION}::Widgets
 		veyon-core)
 endif()
