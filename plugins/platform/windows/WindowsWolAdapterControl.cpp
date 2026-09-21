@@ -15,7 +15,10 @@
 #include <setupapi.h>
 #include <devguid.h>
 
+#include <QDateTime>
+#include <QDir>
 #include <QElapsedTimer>
+#include <QFile>
 #include <QHostAddress>
 #include <QMutex>
 #include <QThread>
@@ -385,6 +388,56 @@ bool setSetupDiAdminStatus(unsigned long interfaceIndex, bool enabled)
 	return success;
 }
 
+bool setNetshAdminStatus(const QString& alias, bool enabled)
+{
+	if (alias.isEmpty())
+	{
+		return false;
+	}
+
+	wchar_t systemRoot[MAX_PATH] = {};
+	if (GetEnvironmentVariableW(L"SystemRoot", systemRoot, MAX_PATH) == 0)
+	{
+		wcsncpy(systemRoot, L"C:\\Windows", MAX_PATH - 1);
+	}
+
+	const QString command = QStringLiteral("\"%1\\System32\\netsh.exe\" interface set interface name=\"%2\" admin=%3")
+							.arg(QString::fromWCharArray(systemRoot),
+								 alias,
+								 enabled ? QStringLiteral("ENABLED") : QStringLiteral("DISABLED"));
+	wchar_t commandLine[1024] = {};
+	const int length = command.toWCharArray(commandLine);
+	if (length <= 0 || length >= int(sizeof(commandLine) / sizeof(commandLine[0])) - 1)
+	{
+		return false;
+	}
+	commandLine[length] = 0;
+
+	STARTUPINFOW startupInfo{};
+	startupInfo.cb = sizeof(startupInfo);
+	startupInfo.dwFlags = STARTF_USESHOWWINDOW;
+	startupInfo.wShowWindow = SW_HIDE;
+	PROCESS_INFORMATION processInfo{};
+	if (CreateProcessW(nullptr, commandLine, nullptr, nullptr, FALSE,
+					   CREATE_NO_WINDOW, nullptr, nullptr, &startupInfo, &processInfo) == FALSE)
+	{
+		WindowsWolAdapterControl::log(QStringLiteral("netsh CreateProcess failed %1 for %2").arg(GetLastError()).arg(alias));
+		return false;
+	}
+
+	const DWORD waited = WaitForSingleObject(processInfo.hProcess, 8000);
+	DWORD exitCode = 1;
+	GetExitCodeProcess(processInfo.hProcess, &exitCode);
+	CloseHandle(processInfo.hThread);
+	CloseHandle(processInfo.hProcess);
+
+	WindowsWolAdapterControl::log(QStringLiteral("netsh %1 admin=%2 wait=%3 exit=%4")
+								  .arg(alias, enabled ? QStringLiteral("ENABLED") : QStringLiteral("DISABLED"))
+								  .arg(waited)
+								  .arg(exitCode));
+	return waited == WAIT_OBJECT_0 && exitCode == 0;
+}
+
 AdapterInfo adapterByIndex(unsigned long interfaceIndex)
 {
 	const auto adapters = enumerateAdapters();
@@ -426,6 +479,7 @@ private:
 		if (adapter.index == 0)
 		{
 			vWarning() << "no Ethernet adapter found for Wake-on-LAN";
+			WindowsWolAdapterControl::log(QStringLiteral("no Ethernet adapter found"));
 			return;
 		}
 
@@ -436,14 +490,23 @@ private:
 				 << "admin" << adapter.adminStatus << "oper" << adapter.operStatus
 				 << adapter.ipv4.toString();
 
+		WindowsWolAdapterControl::log(QStringLiteral("using interface %1 %2 admin %3 oper %4 ipv4 %5")
+									  .arg(adapter.index)
+									  .arg(adapter.alias)
+									  .arg(adapter.adminStatus)
+									  .arg(adapter.operStatus)
+									  .arg(adapter.ipv4.toString()));
+
 		if (adapter.adminStatus != NET_IF_ADMIN_STATUS_UP)
 		{
 			if (WindowsWolAdapterControl::setAdminStatus(adapter.index, true) == false)
 			{
 				vWarning() << "failed to enable WOL interface" << adapter.index;
+				WindowsWolAdapterControl::log(QStringLiteral("failed to enable interface %1").arg(adapter.index));
 				return;
 			}
 			m_changed = true;
+			WindowsWolAdapterControl::log(QStringLiteral("enabled interface %1").arg(adapter.index));
 		}
 
 		QElapsedTimer timer;
@@ -470,6 +533,11 @@ private:
 			vWarning() << "WOL interface" << m_index << "did not become ready in time"
 					   << "admin" << ready.adminStatus << "oper" << ready.operStatus
 					   << "IPv4" << ready.ipv4.toString() << "prefix" << ready.prefixLength;
+			WindowsWolAdapterControl::log(QStringLiteral("interface %1 not ready admin %2 oper %3 ipv4 %4")
+										  .arg(m_index)
+										  .arg(ready.adminStatus)
+										  .arg(ready.operStatus)
+										  .arg(ready.ipv4.toString()));
 			return;
 		}
 
@@ -493,10 +561,12 @@ private:
 		if (WindowsWolAdapterControl::setAdminStatus(m_index, enable) == false)
 		{
 			vWarning() << "failed to restore WOL interface" << m_index << "enabled" << enable;
+			WindowsWolAdapterControl::log(QStringLiteral("failed to restore interface %1 enabled %2").arg(m_index).arg(enable));
 		}
 		else
 		{
 			vDebug() << "restored WOL interface" << m_index << "enabled" << enable;
+			WindowsWolAdapterControl::log(QStringLiteral("restored interface %1 enabled %2").arg(m_index).arg(enable));
 		}
 		m_changed = false;
 	}
@@ -525,10 +595,27 @@ bool WindowsWolAdapterControl::setAdminStatusNative(unsigned long interfaceIndex
 {
 	if (setIfEntryAdminStatus(interfaceIndex, enabled))
 	{
+		log(QStringLiteral("SetIfEntry %1 enabled %2").arg(interfaceIndex).arg(enabled));
 		return true;
 	}
 
-	return setSetupDiAdminStatus(interfaceIndex, enabled);
+	if (setSetupDiAdminStatus(interfaceIndex, enabled))
+	{
+		log(QStringLiteral("SetupDi %1 enabled %2").arg(interfaceIndex).arg(enabled));
+		return true;
+	}
+
+	const auto adapter = adapterByIndex(interfaceIndex);
+	if (setNetshAdminStatus(adapter.alias, enabled))
+	{
+		return true;
+	}
+
+	log(QStringLiteral("native enable/disable failed for %1 enabled %2 lastError %3")
+		.arg(interfaceIndex)
+		.arg(enabled)
+		.arg(GetLastError()));
+	return false;
 }
 
 bool WindowsWolAdapterControl::setAdminStatus(unsigned long interfaceIndex, bool enabled)
@@ -539,4 +626,23 @@ bool WindowsWolAdapterControl::setAdminStatus(unsigned long interfaceIndex, bool
 	}
 
 	return WindowsWolAdapterIpcClient::setAdminStatus(interfaceIndex, enabled);
+}
+
+void WindowsWolAdapterControl::log(const QString& message)
+{
+	wchar_t programData[MAX_PATH] = {};
+	if (GetEnvironmentVariableW(L"ProgramData", programData, MAX_PATH) == 0)
+	{
+		wcsncpy(programData, L"C:\\ProgramData", MAX_PATH - 1);
+	}
+
+	const QString directory = QString::fromWCharArray(programData) + QStringLiteral("/Veyon");
+	QDir().mkpath(directory);
+	QFile file(directory + QStringLiteral("/wol-adapter.log"));
+	if (file.open(QIODevice::WriteOnly | QIODevice::Append | QIODevice::Text))
+	{
+		const auto line = QDateTime::currentDateTime().toString(QStringLiteral("yyyy-MM-dd HH:mm:ss ")) +
+						  message + QLatin1Char('\n');
+		file.write(line.toUtf8());
+	}
 }

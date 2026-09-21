@@ -15,7 +15,6 @@
 #include <QElapsedTimer>
 #include <QFileInfo>
 #include <QIODevice>
-#include <QLocalSocket>
 
 #include "VeyonCore.h"
 #include "WindowsWolAdapterControl.h"
@@ -207,6 +206,10 @@ void handleConnectedClient(HANDLE pipe, HANDLE stopEvent)
 		WindowsWolAdapterControl::canTemporarilyEnableAdapter(interfaceIndex))
 	{
 		result = WindowsWolAdapterControl::setAdminStatusNative(interfaceIndex, enabled != 0) ? 1 : 0;
+		WindowsWolAdapterControl::log(QStringLiteral("helper native %1 interface %2 enabled %3")
+									  .arg(result)
+									  .arg(interfaceIndex)
+									  .arg(enabled));
 	}
 	else if (command == 1)
 	{
@@ -270,10 +273,12 @@ void WindowsWolAdapterIpcServer::run()
 	if (pipe == INVALID_HANDLE_VALUE)
 	{
 		vCritical() << "WOL helper pipe is not available";
+		WindowsWolAdapterControl::log(QStringLiteral("helper pipe create failed"));
 		return;
 	}
 
 	vInfo() << "WOL adapter helper listening";
+	WindowsWolAdapterControl::log(QStringLiteral("helper listening"));
 
 	while (WaitForSingleObject(stopEvent, 0) != WAIT_OBJECT_0)
 	{
@@ -321,37 +326,74 @@ void WindowsWolAdapterIpcServer::run()
 
 bool WindowsWolAdapterIpcClient::setAdminStatus(unsigned long interfaceIndex, bool enabled)
 {
-	QLocalSocket socket;
-	socket.connectToServer(WindowsWolAdapterIpcServer::serverName());
-	if (socket.waitForConnected(SocketWaitTimeout) == false)
+	HANDLE pipe = INVALID_HANDLE_VALUE;
+	QElapsedTimer timer;
+	timer.start();
+	while (timer.elapsed() < SocketWaitTimeout)
 	{
-		vWarning() << "WOL adapter helper is not available:" << socket.errorString();
+		pipe = CreateFileW(PipePath, GENERIC_READ | GENERIC_WRITE, 0, nullptr,
+						   OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+		if (pipe != INVALID_HANDLE_VALUE)
+		{
+			break;
+		}
+
+		const DWORD error = GetLastError();
+		if (error == ERROR_PIPE_BUSY)
+		{
+			WaitNamedPipeW(PipePath, SocketWaitTimeout);
+			continue;
+		}
+		if (error != ERROR_FILE_NOT_FOUND)
+		{
+			WindowsWolAdapterControl::log(QStringLiteral("helper CreateFile failed %1").arg(error));
+			return false;
+		}
+		Sleep(50);
+	}
+
+	if (pipe == INVALID_HANDLE_VALUE)
+	{
+		vWarning() << "WOL adapter helper is not available" << GetLastError();
+		WindowsWolAdapterControl::log(QStringLiteral("helper is not available error %1").arg(GetLastError()));
 		return false;
 	}
+
+	DWORD mode = PIPE_READMODE_BYTE;
+	SetNamedPipeHandleState(pipe, &mode, nullptr, nullptr);
 
 	QByteArray payload;
 	QDataStream out(&payload, QIODevice::WriteOnly);
 	out.setVersion(QDataStream::Qt_5_12);
 	out << quint32(1) << quint32(interfaceIndex) << quint32(enabled ? 1 : 0);
-	socket.write(payload);
-	socket.flush();
 
-	QElapsedTimer timeout;
-	timeout.start();
-	while (timeout.elapsed() < MessageTimeout && socket.bytesAvailable() < qint64(sizeof(quint32)))
+	DWORD written = 0;
+	if (WriteFile(pipe, payload.constData(), DWORD(payload.size()), &written, nullptr) == FALSE ||
+		written != DWORD(payload.size()))
 	{
-		socket.waitForReadyRead(SocketWaitTimeout);
-	}
-
-	if (socket.bytesAvailable() < qint64(sizeof(quint32)))
-	{
-		vWarning() << "no response from WOL adapter helper";
+		WindowsWolAdapterControl::log(QStringLiteral("helper write failed %1").arg(GetLastError()));
+		CloseHandle(pipe);
 		return false;
 	}
 
-	QDataStream in(&socket);
+	QByteArray response(int(sizeof(quint32)), 0);
+	DWORD read = 0;
+	if (ReadFile(pipe, response.data(), DWORD(response.size()), &read, nullptr) == FALSE ||
+		read != DWORD(response.size()))
+	{
+		WindowsWolAdapterControl::log(QStringLiteral("helper read failed %1").arg(GetLastError()));
+		CloseHandle(pipe);
+		return false;
+	}
+	CloseHandle(pipe);
+
+	QDataStream in(response);
 	in.setVersion(QDataStream::Qt_5_12);
 	quint32 result = 0;
 	in >> result;
+	WindowsWolAdapterControl::log(QStringLiteral("helper result %1 for interface %2 enabled %3")
+								  .arg(result)
+								  .arg(interfaceIndex)
+								  .arg(enabled));
 	return result != 0;
 }
