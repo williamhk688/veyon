@@ -1,34 +1,42 @@
 CYC Veyon 4.11.2 (based on Veyon) — Windows 64-bit installer
 ============================================================
 
-This build includes:
-  - Display name CYC Veyon; Chuen Yuen College crest as the app/installer icon
-  - Classroom studio UI (navy/teal cards, Configurator rail)
-  - Persistent Windows screen lock and demo lock (window + fullscreen)
-  - Failsafe hotkey Ctrl+Alt+Shift+U (default password ccc24205050CYC)
-  - Faster Lock/Demo start (Interception first; HID/powercfg in the background)
-  - Master: change failsafe password (security questions, then new password twice;
-    no old password, so mixed student PCs can be rewritten together);
-    teacher self-rescue handbook (warning + questions: LCC / DAT / WAN)
-    shows both the default and latest unlock passwords
+Test package: WOL Ethernet enable fix
+  Source: 809afad905e9db2f0c299ac4ea73cc7b88ae6a31
+  Branch: cursor/wol-nic-enable-fix-ecca
 
-Download this file from GitHub (this branch):
-
-  installer/veyon_4_11_2_win64_modified_setup.exe
+This build includes the classroom product plus Wake-on-LAN temporary
+Ethernet enable. Master is not elevated; Veyon Service (SYSTEM) opens
+the Intel Ethernet adapter for a few seconds, then restores it.
 
 Direct download:
 
-  https://github.com/williamhk688/veyon/raw/feature-password-backdoor/installer/veyon_4_11_2_win64_modified_setup.exe
-
-Or open the file on GitHub and click "Download raw file":
-
-  https://github.com/williamhk688/veyon/blob/feature-password-backdoor/installer/veyon_4_11_2_win64_modified_setup.exe
+  https://github.com/williamhk688/veyon/raw/cursor/wol-nic-enable-fix-ecca/installer/veyon_4_11_2_win64_modified_setup.exe
 
 SHA-256:
-  c123c2ecb9354c075928f79026cb2b82ce2944c9fc57fdc167d04d3db4c9de04
+  50e94c397548fb56efd7c369dcee4a75de46f69c30fb590f59e6044a83613f86
 
-This is an unofficial MinGW cross-build of this fork (Qt 6.7.3),
-not an official Veyon Solutions installer. Test on one student PC first.
+After install (required)
+------------------------
+Restart the service so the new helper is loaded:
+
+  sc stop VeyonService
+  sc start VeyonService
+
+Open Master from:
+
+  C:\Program Files\Veyon\veyon-master.exe
+
+NIC flash test (no school LAN required)
+---------------------------------------
+1. Open Windows adapter settings so you can see Intel Ethernet Connection.
+2. Leave that adapter Disabled.
+3. Select a computer in Master and click Power on.
+4. The Intel Ethernet row should become Enabled for up to about 5 seconds,
+   then return to Disabled. Fortinet adapters should not change.
+
+Without a school Ethernet cable, the other PC will not wake. That is
+expected. The adapter flash is the check that enable/restore works.
 
 Install
 -------
@@ -37,28 +45,11 @@ Install
 3. Teacher PC: keep "CYC Veyon Master" selected.
    Student PC: uncheck "CYC Veyon Master", or run:
      veyon_4_11_2_win64_modified_setup.exe /S /NoMaster
-4. Keep "Interception driver" selected on student PCs so lock can
-   block Ctrl+Alt+Del. The installer now runs the driver setup; reboot
-   the student PC once after install. Teacher PCs can uncheck it.
-5. After install, open CYC Veyon Configurator, set authentication, and
-   add student computers in CYC Veyon.
+4. Keep "Interception driver" selected on student PCs.
+5. After install, restart VeyonService as above.
 
 Install path stays `C:\Program Files\Veyon`. The Windows service name
-stays VeyonService. Only the names you see on shortcuts and window titles
-changed.
+stays VeyonService.
 
-Both teacher and student machines MUST run this modified build.
-The persistent lock, demo lock, and failsafe hotkey live on the student PC.
-The self-rescue handbook is in CYC Veyon (teacher PC only).
-
-Teacher Safe Mode recovery guide
---------------------------------
-The same steps are also in Master → 教師自救手冊 (after the security questions).
-
-Direct download:
-
-  https://github.com/williamhk688/veyon/raw/feature-password-backdoor/installer/teacher-lock-recovery.docx
-
-Same file, Chinese filename:
-
-  installer/老師專用-鎖定自救說明.docx
+This is an unofficial MinGW cross-build of this fork (Qt 6.7.3),
+not an official Veyon Solutions installer.
