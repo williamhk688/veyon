@@ -8,5 +8,6 @@ build_veyon_plugin(powercontrol
 	PowerDownTimeInputDialog.cpp
 	PowerDownTimeInputDialog.h
 	PowerDownTimeInputDialog.ui
+	WakeOnLanPacket.h
 	powercontrol.qrc
 	)

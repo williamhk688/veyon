@@ -39,6 +39,7 @@
 #include "HostAddress.h"
 #include "WindowsCoreFunctions.h"
 #include "WindowsNetworkFunctions.h"
+#include "WindowsWolAdapterControl.h"
 
 
 static HRESULT WindowsFirewallInitialize2( INetFwPolicy2** fwPolicy2 )
@@ -413,6 +414,37 @@ int WindowsNetworkFunctions::networkInterfaceSpeedInMBitPerSecond(const QNetwork
 	}
 
 	return 0;
+}
+
+
+
+std::unique_ptr<PlatformNetworkFunctions::WakeOnLanSession>
+WindowsNetworkFunctions::acquireWakeOnLanSession(const QList<QHostAddress>& targetHosts)
+{
+	return WindowsWolAdapterControl::acquireSession(targetHosts);
+}
+
+
+
+void WindowsNetworkFunctions::configureWakeOnLanSocket(Socket socket, int interfaceIndex)
+{
+	if (socket == 0 || interfaceIndex <= 0)
+	{
+		return;
+	}
+
+	const auto native = static_cast<SOCKET>(socket);
+	const DWORD interfaceIndexNetworkOrder = htonl(static_cast<DWORD>(interfaceIndex));
+	if (setsockopt(native, IPPROTO_IP, IP_UNICAST_IF,
+				   reinterpret_cast<const char*>(&interfaceIndexNetworkOrder),
+				   sizeof(interfaceIndexNetworkOrder)) != 0)
+	{
+		vWarning() << "IP_UNICAST_IF failed" << WSAGetLastError();
+	}
+
+	BOOL allowBroadcast = TRUE;
+	setsockopt(native, SOL_SOCKET, SO_BROADCAST,
+			   reinterpret_cast<const char*>(&allowBroadcast), sizeof(allowBroadcast));
 }
 
 

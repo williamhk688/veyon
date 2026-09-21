@@ -56,4 +56,19 @@ if(WITH_TESTS AND VEYON_BUILD_LINUX)
 
 	add_test(NAME VncProtocolRobustnessTest COMMAND VncProtocolRobustnessTest)
 
+	add_executable(WakeOnLanPacketTest
+		WakeOnLanPacketTest.cpp
+	)
+
+	target_include_directories(WakeOnLanPacketTest PRIVATE
+		${CMAKE_SOURCE_DIR}/plugins/powercontrol
+	)
+
+	target_link_libraries(WakeOnLanPacketTest PRIVATE
+		Qt${QT_MAJOR_VERSION}::Test
+		Qt${QT_MAJOR_VERSION}::Network
+	)
+
+	add_test(NAME WakeOnLanPacketTest COMMAND WakeOnLanPacketTest)
+
 endif()

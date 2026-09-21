@@ -28,6 +28,7 @@
 #include "CommandLinePluginInterface.h"
 #include "Feature.h"
 #include "FeatureProviderInterface.h"
+#include "PlatformNetworkFunctions.h"
 
 class PowerControlFeaturePlugin : public QObject,
 		PluginInterface,
@@ -114,7 +115,8 @@ protected:
 
 private:
 	bool confirmFeatureExecution( const Feature& feature, bool all, QWidget* parent );
-	static bool broadcastWOLPacket( QString macAddress );
+	static bool broadcastWOLPacket(QString macAddress,
+								   const PlatformNetworkFunctions::WakeOnLanEndpoint& endpoint = {});
 
 	void confirmShutdown();
 	void displayShutdownTimeout( int shutdownTimeout );

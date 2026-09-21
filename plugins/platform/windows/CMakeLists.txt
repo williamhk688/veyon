@@ -44,6 +44,10 @@ build_veyon_plugin(windows-platform
 	WindowsSessionFunctions.h
 	WindowsSmartObjects.h
 	WindowsUserFunctions.h
+	WindowsWolAdapterControl.cpp
+	WindowsWolAdapterControl.h
+	WindowsWolAdapterIpc.cpp
+	WindowsWolAdapterIpc.h
 	WtsSessionManager.h
 	DesktopInputController.h
 	SasEventListener.h
@@ -66,7 +70,7 @@ target_include_directories(windows-platform PRIVATE
 	${ultravnc_DIR}
 	)
 
-target_link_libraries(windows-platform PRIVATE -lws2_32 -lwtsapi32 -lnetapi32 -luserenv -limm32 -lntdll -linterception -liphlpapi -lsetupapi -lsecur32)
+target_link_libraries(windows-platform PRIVATE -lws2_32 -lwtsapi32 -lnetapi32 -luserenv -limm32 -lntdll -linterception -liphlpapi -lsetupapi -lsecur32 -ladvapi32 -lole32)
 if(MINGW_PREFIX)
 	target_link_directories(windows-platform PRIVATE ${MINGW_PREFIX}/lib)
 endif()
@@ -79,4 +83,4 @@ set_source_files_properties(
 	${ultravnc_DIR}/addon/ms-logon/authSSP/authSSP.cpp
 	${ultravnc_DIR}/addon/ms-logon/authSSP/GenClientServerContext.cpp
 	PROPERTIES COMPILE_FLAGS "-D__try= -Wno-error")
-set_source_files_properties(WindowsNetworkFunctions.cpp PROPERTIES SKIP_UNITY_BUILD_INCLUSION TRUE SKIP_PRECOMPILE_HEADERS TRUE)
+set_source_files_properties(WindowsNetworkFunctions.cpp WindowsWolAdapterControl.cpp PROPERTIES SKIP_UNITY_BUILD_INCLUSION TRUE SKIP_PRECOMPILE_HEADERS TRUE)

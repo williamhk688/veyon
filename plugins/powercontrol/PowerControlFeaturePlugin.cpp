@@ -28,19 +28,24 @@
 #include <QNetworkInterface>
 #include <QProgressBar>
 #include <QProgressDialog>
+#include <QThread>
 #include <QUdpSocket>
 
 #include "Computer.h"
 #include "ComputerControlInterface.h"
 #include "FeatureWorkerManager.h"
+#include "HostAddress.h"
 #include "NetworkObjectDirectoryManager.h"
 #include "PlatformCoreFunctions.h"
+#include "PlatformNetworkFunctions.h"
 #include "PlatformUserFunctions.h"
 #include "PowerControlFeaturePlugin.h"
 #include "PowerDownTimeInputDialog.h"
 #include "VeyonConfiguration.h"
+#include "VeyonCore.h"
 #include "VeyonMasterInterface.h"
 #include "VeyonServerInterface.h"
+#include "WakeOnLanPacket.h"
 
 
 PowerControlFeaturePlugin::PowerControlFeaturePlugin( QObject* parent ) :
@@ -141,6 +146,11 @@ bool PowerControlFeaturePlugin::controlFeature( Feature::Uid featureUid,
 		(void) QtConcurrent::run([hosts]() {
 			const auto directory = VeyonCore::networkObjectDirectoryManager().configuredDirectory();
 
+			QList<QHostAddress> targetHosts;
+			QStringList macAddresses;
+			targetHosts.reserve(hosts.size());
+			macAddresses.reserve(hosts.size());
+
 			for (const auto& host : hosts)
 			{
 				auto macAddress = host.macAddress();
@@ -150,14 +160,41 @@ bool PowerControlFeaturePlugin::controlFeature( Feature::Uid featureUid,
 																 NetworkObject::Attribute::MacAddress).toString();
 				}
 
-				if (macAddress.isEmpty() == false)
-				{
-					broadcastWOLPacket(macAddress);
-				}
-				else
+				if (macAddress.isEmpty())
 				{
 					vWarning() << "no MAC address available for host" << host.hostName() << "with ID" << host.networkObjectUid();
+					continue;
 				}
+
+				macAddresses.append(macAddress);
+
+				auto hostAddress = host.hostAddress();
+				if (hostAddress.isNull())
+				{
+					hostAddress = QHostAddress(host.hostName());
+				}
+				if (hostAddress.protocol() != QAbstractSocket::IPv4Protocol)
+				{
+					const auto ip = HostAddress(host.hostName()).tryConvert(HostAddress::Type::IpAddress);
+					hostAddress = QHostAddress(ip);
+				}
+				if (hostAddress.protocol() == QAbstractSocket::IPv4Protocol)
+				{
+					targetHosts.append(hostAddress);
+				}
+			}
+
+			const auto session = VeyonCore::platform().networkFunctions().acquireWakeOnLanSession(targetHosts);
+			const auto endpoint = session ? session->endpoint() : PlatformNetworkFunctions::WakeOnLanEndpoint{};
+
+			for (const auto& macAddress : macAddresses)
+			{
+				broadcastWOLPacket(macAddress, endpoint);
+			}
+
+			if (endpoint.isValid())
+			{
+				QThread::msleep(WakeOnLanPacket::PostSendDelayMs);
 			}
 		});
 	}
@@ -309,7 +346,9 @@ CommandLinePluginInterface::RunResult PowerControlFeaturePlugin::handle_on( cons
 		return NotEnoughArguments;
 	}
 
-	return broadcastWOLPacket( arguments.first() ) ? Successful : Failed;
+	const auto session = VeyonCore::platform().networkFunctions().acquireWakeOnLanSession({});
+	const auto endpoint = session ? session->endpoint() : PlatformNetworkFunctions::WakeOnLanEndpoint{};
+	return broadcastWOLPacket( arguments.first(), endpoint ) ? Successful : Failed;
 }
 
 
@@ -359,7 +398,8 @@ bool PowerControlFeaturePlugin::confirmFeatureExecution( const Feature& feature,
 
 
 
-bool PowerControlFeaturePlugin::broadcastWOLPacket( QString macAddress )
+bool PowerControlFeaturePlugin::broadcastWOLPacket( QString macAddress,
+													const PlatformNetworkFunctions::WakeOnLanEndpoint& endpoint )
 {
 	if (macAddress.isEmpty())
 	{
@@ -367,35 +407,63 @@ bool PowerControlFeaturePlugin::broadcastWOLPacket( QString macAddress )
 	}
 
 	const auto originalMacAddress = macAddress;
+	const auto macAddressBytes = WakeOnLanPacket::normalizedMacBytes(macAddress);
 
-	// remove all possible delimiters
-	macAddress.replace( QLatin1Char(':'), QString() );
-	macAddress.replace( QLatin1Char('-'), QString() );
-	macAddress.replace( QLatin1Char('.'), QString() );
-
-	const auto macAddressBytes = QByteArray::fromHex(macAddress.toUtf8());
-	static constexpr auto MacAddressSize = 6;
-
-	if (macAddressBytes.size() != MacAddressSize)
+	if (macAddressBytes.size() != WakeOnLanPacket::MacAddressSize)
 	{
 		CommandLineIO::error( tr( "Invalid MAC address specified!" ) );
 		vWarning() << "invalid MAC address" << originalMacAddress;
 		return false;
 	}
 
-	static constexpr auto MagicPacketFieldCount = 17;
-
-	QByteArray datagram(MacAddressSize * MagicPacketFieldCount, char(0xff));
-
-	for (int i = 1; i < MagicPacketFieldCount; ++i)
+	const auto datagram = WakeOnLanPacket::magicPacket(macAddressBytes);
+	if (datagram.isEmpty())
 	{
-		datagram.replace(i * MacAddressSize, MacAddressSize, macAddressBytes);
+		return false;
+	}
+
+	auto sendOnce = [&](QUdpSocket& udpSocket, const QHostAddress& destination) {
+		return udpSocket.writeDatagram(datagram, destination, WakeOnLanPacket::WolUdpPort) == datagram.size();
+	};
+
+	auto sendWithRetries = [&](QUdpSocket& udpSocket, const QHostAddress& destination) {
+		bool success = true;
+		for (int attempt = 0; attempt < WakeOnLanPacket::RetryCount; ++attempt)
+		{
+			success &= sendOnce(udpSocket, destination);
+			if (attempt + 1 < WakeOnLanPacket::RetryCount)
+			{
+				QThread::msleep(WakeOnLanPacket::RetryIntervalMs);
+			}
+		}
+		return success;
+	};
+
+	if (endpoint.isValid())
+	{
+		QUdpSocket udpSocket;
+		if (udpSocket.bind(endpoint.localAddress, 0) == false)
+		{
+			vWarning() << "failed to bind WOL socket to" << endpoint.localAddress.toString() << udpSocket.errorString();
+			return false;
+		}
+
+		VeyonCore::platform().networkFunctions().configureWakeOnLanSocket(
+					static_cast<PlatformNetworkFunctions::Socket>(udpSocket.socketDescriptor()),
+					endpoint.interfaceIndex);
+
+		vDebug() << "broadcasting WOL packet for" << originalMacAddress
+				 << "from" << endpoint.localAddress.toString()
+				 << "to" << endpoint.broadcastAddress.toString()
+				 << "ifIndex" << endpoint.interfaceIndex;
+
+		return sendWithRetries(udpSocket, endpoint.broadcastAddress);
 	}
 
 	QUdpSocket udpSocket;
 
 	vDebug() << "broadcasting WOL packet for" << originalMacAddress;
-	bool success = ( udpSocket.writeDatagram( datagram, QHostAddress::Broadcast, 9 ) == datagram.size() );
+	bool success = ( udpSocket.writeDatagram( datagram, QHostAddress::Broadcast, WakeOnLanPacket::WolUdpPort ) == datagram.size() );
 
 	const auto networkInterfaces = QNetworkInterface::allInterfaces();
 	for( const auto& networkInterface : networkInterfaces )
@@ -406,7 +474,7 @@ bool PowerControlFeaturePlugin::broadcastWOLPacket( QString macAddress )
 			if( addressEntry.broadcast().isNull() == false )
 			{
 				vDebug() << "broadcasting WOL packet for" << originalMacAddress << "via" << addressEntry.broadcast().toString();
-				success &= ( udpSocket.writeDatagram( datagram, addressEntry.broadcast(), 9 ) == datagram.size() );
+				success &= ( udpSocket.writeDatagram( datagram, addressEntry.broadcast(), WakeOnLanPacket::WolUdpPort ) == datagram.size() );
 			}
 		}
 	}

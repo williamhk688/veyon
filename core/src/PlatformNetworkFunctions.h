@@ -24,6 +24,11 @@
 
 #pragma once
 
+#include <memory>
+
+#include <QAbstractSocket>
+#include <QHostAddress>
+#include <QList>
 #include <QNetworkInterface>
 
 #include "PlatformPluginInterface.h"
@@ -45,6 +50,33 @@ public:
 		NameResolutionFailed
 	};
 
+	struct WakeOnLanEndpoint
+	{
+		QHostAddress localAddress;
+		QHostAddress broadcastAddress;
+		int interfaceIndex = 0;
+
+		bool isValid() const
+		{
+			return localAddress.protocol() == QAbstractSocket::IPv4Protocol &&
+					broadcastAddress.protocol() == QAbstractSocket::IPv4Protocol;
+		}
+	};
+
+	class WakeOnLanSession
+	{
+	public:
+		virtual ~WakeOnLanSession() = default;
+
+		WakeOnLanEndpoint endpoint() const
+		{
+			return m_endpoint;
+		}
+
+	protected:
+		WakeOnLanEndpoint m_endpoint;
+	};
+
 	virtual ~PlatformNetworkFunctions() = default;
 
 	virtual PingResult ping(const QString& hostAddress) = 0;
@@ -54,5 +86,17 @@ public:
 
 	virtual QNetworkInterface defaultRouteNetworkInterface() = 0;
 	virtual int networkInterfaceSpeedInMBitPerSecond(const QNetworkInterface& networkInterface) = 0;
+
+	virtual std::unique_ptr<WakeOnLanSession> acquireWakeOnLanSession(const QList<QHostAddress>& targetHosts)
+	{
+		Q_UNUSED(targetHosts)
+		return std::make_unique<WakeOnLanSession>();
+	}
+
+	virtual void configureWakeOnLanSocket(Socket socket, int interfaceIndex)
+	{
+		Q_UNUSED(socket)
+		Q_UNUSED(interfaceIndex)
+	}
 
 };

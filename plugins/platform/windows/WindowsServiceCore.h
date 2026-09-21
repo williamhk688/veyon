@@ -30,6 +30,7 @@
 #include "PlatformSessionManager.h"
 #include "ServiceDataManager.h"
 #include "WindowsSmartObjects.h"
+#include "WindowsWolAdapterIpc.h"
 
 class WindowsServiceCore
 {
@@ -78,6 +79,7 @@ private:
 
 	ServiceDataManager m_dataManager{};
 	PlatformSessionManager m_sessionManager{};
+	WindowsWolAdapterIpcServer m_wolAdapterIpc{};
 
 	static constexpr auto SessionPollingInterval = 5000;
 	static constexpr auto MinimumServerUptimeTime = 10000;

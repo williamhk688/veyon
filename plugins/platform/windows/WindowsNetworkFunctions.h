@@ -43,6 +43,9 @@ public:
 	QNetworkInterface defaultRouteNetworkInterface() override;
 	int networkInterfaceSpeedInMBitPerSecond(const QNetworkInterface& networkInterface) override;
 
+	std::unique_ptr<WakeOnLanSession> acquireWakeOnLanSession(const QList<QHostAddress>& targetHosts) override;
+	void configureWakeOnLanSocket(Socket socket, int interfaceIndex) override;
+
 	static constexpr auto WindowsFirewallServiceError = HRESULT(0x800706D9);
 
 private:
