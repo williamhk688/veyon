@@ -6,8 +6,11 @@
  * This file is part of Veyon - https://veyon.io
  */
 
+#include <windows.h>
+
 #include <QDataStream>
 #include <QElapsedTimer>
+#include <QFileInfo>
 #include <QIODevice>
 #include <QLocalServer>
 #include <QLocalSocket>
@@ -19,6 +22,74 @@
 
 static constexpr auto SocketWaitTimeout = 1000;
 static constexpr auto MessageTimeout = 8000;
+
+
+namespace
+{
+
+bool isAuthorizedClient(QLocalSocket* socket)
+{
+	if (socket == nullptr || socket->socketDescriptor() == -1)
+	{
+		return false;
+	}
+
+	ULONG clientProcessId = 0;
+	const auto pipeHandle = reinterpret_cast<HANDLE>(socket->socketDescriptor());
+	if (GetNamedPipeClientProcessId(pipeHandle, &clientProcessId) == FALSE || clientProcessId == 0)
+	{
+		vWarning() << "can't determine WOL helper client process";
+		return false;
+	}
+
+	const HANDLE process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, clientProcessId);
+	if (process == nullptr)
+	{
+		vWarning() << "can't open WOL helper client process" << clientProcessId;
+		return false;
+	}
+
+	wchar_t clientPathBuffer[32768] = {};
+	DWORD clientPathLength = DWORD(std::size(clientPathBuffer));
+	const bool gotClientPath =
+			QueryFullProcessImageNameW(process, 0, clientPathBuffer, &clientPathLength) != FALSE;
+	CloseHandle(process);
+
+	if (gotClientPath == false)
+	{
+		vWarning() << "can't query WOL helper client image" << clientProcessId;
+		return false;
+	}
+
+	wchar_t servicePathBuffer[32768] = {};
+	const DWORD servicePathLength =
+			GetModuleFileNameW(nullptr, servicePathBuffer, DWORD(std::size(servicePathBuffer)));
+	if (servicePathLength == 0 || servicePathLength >= std::size(servicePathBuffer))
+	{
+		vWarning() << "can't query Veyon Service image path";
+		return false;
+	}
+
+	const QFileInfo clientInfo(QString::fromWCharArray(clientPathBuffer, int(clientPathLength)));
+	const QFileInfo serviceInfo(QString::fromWCharArray(servicePathBuffer, int(servicePathLength)));
+	const auto clientName = clientInfo.fileName().toLower();
+
+	const bool knownExecutable =
+			clientName == QStringLiteral("veyon-master.exe") ||
+			clientName == QStringLiteral("veyon-cli.exe");
+	const bool sameInstallDirectory =
+			clientInfo.absolutePath().compare(serviceInfo.absolutePath(), Qt::CaseInsensitive) == 0;
+
+	if (knownExecutable == false || sameInstallDirectory == false)
+	{
+		vWarning() << "rejected WOL helper client" << clientInfo.absoluteFilePath();
+		return false;
+	}
+
+	return true;
+}
+
+}
 
 
 WindowsWolAdapterIpcServer::WindowsWolAdapterIpcServer(QObject* parent) :
@@ -78,6 +149,12 @@ void WindowsWolAdapterIpcServer::acceptConnection()
 	}
 
 	connect(socket, &QLocalSocket::readyRead, socket, [socket]() {
+		if (isAuthorizedClient(socket) == false)
+		{
+			socket->disconnectFromServer();
+			return;
+		}
+
 		QDataStream in(socket);
 		in.setVersion(QDataStream::Qt_5_12);
 		if (socket->bytesAvailable() < qint64(sizeof(quint32) * 3))
@@ -91,9 +168,14 @@ void WindowsWolAdapterIpcServer::acceptConnection()
 		in >> command >> interfaceIndex >> enabled;
 
 		quint32 result = 0;
-		if (command == 1)
+		if (command == 1 &&
+			WindowsWolAdapterControl::canTemporarilyEnableAdapter(interfaceIndex))
 		{
 			result = WindowsWolAdapterControl::setAdminStatusNative(interfaceIndex, enabled != 0) ? 1 : 0;
+		}
+		else if (command == 1)
+		{
+			vWarning() << "rejected WOL helper request for non-Ethernet interface" << interfaceIndex;
 		}
 
 		QByteArray payload;
