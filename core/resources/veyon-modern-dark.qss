@@ -341,9 +341,9 @@ QWidget#configuratorSidebar {
 
 QLabel#configuratorBrandTitle {
 	color: #22d3ee;
-	font-size: 20px;
+	font-size: 18px;
 	font-weight: 800;
-	letter-spacing: 1px;
+	letter-spacing: 0.5px;
 	padding: 20px 18px 2px 18px;
 }
 

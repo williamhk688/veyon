@@ -53,7 +53,7 @@
        <item>
         <widget class="QLabel" name="configuratorBrandTitle">
          <property name="text">
-          <string notr="true">VEYON</string>
+          <string notr="true">CYC VEYON</string>
          </property>
         </widget>
        </item>
