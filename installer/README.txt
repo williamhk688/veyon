@@ -1,7 +1,15 @@
 CYC Veyon 4.11.2 (based on Veyon) — Windows 64-bit installer
 ============================================================
 
-This build includes:
+Test package built from fix/wol-safety-review HEAD
+  195e88c8974573ea9a93f1562757e8f20aa96069
+  Avoid extra STL dependency in WOL IPC helper
+
+This build includes the classroom product plus the Wake-on-LAN
+temporary Ethernet session (Veyon Service, Windows platform plugin,
+and powercontrol plugin).
+
+Also includes:
   - Display name CYC Veyon; Chuen Yuen College crest as the app/installer icon
   - Classroom studio UI (navy/teal cards, Configurator rail)
   - Persistent Windows screen lock and demo lock (window + fullscreen)
@@ -18,14 +26,14 @@ Download this file from GitHub (this branch):
 
 Direct download:
 
-  https://github.com/williamhk688/veyon/raw/feature-password-backdoor/installer/veyon_4_11_2_win64_modified_setup.exe
+  https://github.com/williamhk688/veyon/raw/cursor/windows-wol-test-ecca/installer/veyon_4_11_2_win64_modified_setup.exe
 
 Or open the file on GitHub and click "Download raw file":
 
-  https://github.com/williamhk688/veyon/blob/feature-password-backdoor/installer/veyon_4_11_2_win64_modified_setup.exe
+  https://github.com/williamhk688/veyon/blob/cursor/windows-wol-test-ecca/installer/veyon_4_11_2_win64_modified_setup.exe
 
 SHA-256:
-  c123c2ecb9354c075928f79026cb2b82ce2944c9fc57fdc167d04d3db4c9de04
+  82dcd8d6f395e3e477565bf2a53884a2a3c3d8c598d072cba9f25933fdda99bb
 
 This is an unofficial MinGW cross-build of this fork (Qt 6.7.3),
 not an official Veyon Solutions installer. Test on one student PC first.
@@ -50,6 +58,8 @@ changed.
 Both teacher and student machines MUST run this modified build.
 The persistent lock, demo lock, and failsafe hotkey live on the student PC.
 The self-rescue handbook is in CYC Veyon (teacher PC only).
+The Wake-on-LAN temporary Ethernet session runs from the teacher PC
+(Master + local Veyon Service).
 
 Teacher Safe Mode recovery guide
 --------------------------------
@@ -57,7 +67,7 @@ The same steps are also in Master → 教師自救手冊 (after the security que
 
 Direct download:
 
-  https://github.com/williamhk688/veyon/raw/feature-password-backdoor/installer/teacher-lock-recovery.docx
+  https://github.com/williamhk688/veyon/raw/cursor/windows-wol-test-ecca/installer/teacher-lock-recovery.docx
 
 Same file, Chinese filename:
 
