@@ -218,9 +218,20 @@ AdapterInfo chooseEthernetAdapter(const QList<AdapterInfo>& adapters, const QLis
 	ethernet.reserve(adapters.size());
 	for (const auto& adapter : adapters)
 	{
-		if (isEthernet(adapter.type) && looksVirtual(adapter) == false)
+		if (isEthernet(adapter.type) && adapter.hardware && looksVirtual(adapter) == false)
 		{
 			ethernet.append(adapter);
+		}
+	}
+
+	if (ethernet.isEmpty())
+	{
+		for (const auto& adapter : adapters)
+		{
+			if (isEthernet(adapter.type) && looksVirtual(adapter) == false)
+			{
+				ethernet.append(adapter);
+			}
 		}
 	}
 
@@ -261,14 +272,14 @@ AdapterInfo chooseEthernetAdapter(const QList<AdapterInfo>& adapters, const QLis
 	}
 
 	if (auto match = firstMatch([](const AdapterInfo& adapter) {
-			return adapter.operStatus == IfOperStatusUp && adapter.ipv4.isNull() == false;
+			return adapter.adminStatus == NET_IF_ADMIN_STATUS_DOWN;
 		}); match.index != 0)
 	{
 		return match;
 	}
 
 	if (auto match = firstMatch([](const AdapterInfo& adapter) {
-			return adapter.adminStatus == NET_IF_ADMIN_STATUS_DOWN;
+			return adapter.operStatus == IfOperStatusUp && adapter.ipv4.isNull() == false;
 		}); match.index != 0)
 	{
 		return match;
@@ -438,21 +449,27 @@ private:
 		QElapsedTimer timer;
 		timer.start();
 		AdapterInfo ready;
+		bool readyOk = false;
 		while (timer.elapsed() < WindowsWolAdapterControl::LinkReadyTimeoutMs)
 		{
 			ready = adapterByIndex(m_index);
-			if (ready.adminStatus == NET_IF_ADMIN_STATUS_UP &&
-				ready.operStatus == IfOperStatusUp &&
-				ready.ipv4.isNull() == false)
+			readyOk = ready.adminStatus == NET_IF_ADMIN_STATUS_UP &&
+					ready.operStatus == IfOperStatusUp &&
+					ready.ipv4.isNull() == false &&
+					ready.prefixLength > 0 &&
+					ready.prefixLength < 32;
+			if (readyOk)
 			{
 				break;
 			}
 			QThread::msleep(WindowsWolAdapterControl::LinkPollIntervalMs);
 		}
 
-		if (ready.ipv4.isNull())
+		if (readyOk == false)
 		{
-			vWarning() << "WOL interface" << m_index << "did not become ready in time";
+			vWarning() << "WOL interface" << m_index << "did not become ready in time"
+					   << "admin" << ready.adminStatus << "oper" << ready.operStatus
+					   << "IPv4" << ready.ipv4.toString() << "prefix" << ready.prefixLength;
 			return;
 		}
 
@@ -494,6 +511,15 @@ WindowsWolAdapterControl::acquireSession(const QList<QHostAddress>& targetHosts)
 {
 	return std::make_unique<WindowsWakeOnLanSession>(targetHosts);
 }
+
+bool WindowsWolAdapterControl::canTemporarilyEnableAdapter(unsigned long interfaceIndex)
+{
+	const auto adapter = adapterByIndex(interfaceIndex);
+	return adapter.index != 0 &&
+			isEthernet(adapter.type) &&
+			looksVirtual(adapter) == false;
+}
+
 
 bool WindowsWolAdapterControl::setAdminStatusNative(unsigned long interfaceIndex, bool enabled)
 {
