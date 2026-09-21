@@ -1,7 +1,7 @@
 /*
- * DemoClient.h - client for demo server
+ * VeyonFailsafeRegistry.h - HKLM location for the failsafe unlock password
  *
- * Copyright (c) 2006-2026 Tobias Junghans <tobydox@veyon.io>
+ * Copyright (c) 2026 Tobias Junghans <tobydox@veyon.io>
  *
  * This file is part of Veyon - https://veyon.io
  *
@@ -24,34 +24,19 @@
 
 #pragma once
 
-#include <QObject>
-
-#include "ComputerControlInterface.h"
-
-class VncViewWidget;
-
-class DemoClient : public QObject
-{
-	Q_OBJECT
-public:
-	DemoClient( const QString& host, int port, bool fullscreen, QRect viewport, QObject* parent = nullptr );
-	~DemoClient() override;
-
-Q_SIGNALS:
-	void failsafeUnlocked();
-
-protected:
-	bool eventFilter(QObject* watched, QEvent* event) override;
-
-private:
-	void viewDestroyed( QObject* obj );
-	void resizeToplevelWidget();
-	void promptFailsafeUnlock();
-
-	QWidget* m_toplevel{nullptr};
-
-	ComputerControlInterface::Pointer m_computerControlInterface;
-	VncViewWidget* m_vncView{nullptr};
-	bool m_failsafePromptOpen{false};
-
-} ;
+/*!
+ * Windows 10/11 registry location for the teacher failsafe unlock password.
+ *
+ * Sibling of Configuration::LocalStore
+ *   HKLM\SOFTWARE\Veyon Solutions\Veyon
+ * and of VeyonScreenLock / VeyonDemo so Configurator flush/clear cannot
+ * wipe the password.
+ *
+ * Open with KEY_WOW64_64KEY to match QSettings::Registry64Format.
+ *
+ * Value name FailsafePassword is a REG_SZ. When the value is missing the
+ * built-in default from FailsafePasswordState is used.
+ */
+inline constexpr wchar_t VeyonFailsafeRegistryKey[] =
+	L"SOFTWARE\\Veyon Solutions\\VeyonFailsafe";
+inline constexpr wchar_t VeyonFailsafePasswordValue[] = L"FailsafePassword";

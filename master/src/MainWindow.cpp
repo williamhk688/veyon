@@ -304,10 +304,10 @@ bool MainWindow::initAuthentication()
 		QMessageBox::information(nullptr,
 								 tr("Authentication impossible"),
 								 tr("No authentication key files were found or your current ones "
-									"are outdated. Please create new key files using Veyon "
+									"are outdated. Please create new key files using CYC Veyon "
 									"Configurator. Alternatively set up logon authentication "
-									"using Veyon Configurator. Otherwise you won't be "
-									"able to access computers using Veyon."));
+									"using CYC Veyon Configurator. Otherwise you won't be "
+									"able to access computers using CYC Veyon."));
 	}
 
 	return false;

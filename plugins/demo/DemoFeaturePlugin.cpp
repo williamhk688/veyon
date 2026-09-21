@@ -22,6 +22,7 @@
  *
  */
 
+#include <QCoreApplication>
 #include <QMessageBox>
 #include <QScreen>
 #include <QTimer>
@@ -35,6 +36,7 @@
 #include "DemoConfigurationPage.h"
 #include "DemoFeaturePlugin.h"
 #include "DemoServer.h"
+#include "FailsafePasswordState.h"
 #include "FeatureWorkerManager.h"
 #include "HostAddress.h"
 #include "Logger.h"
@@ -45,6 +47,7 @@
 #include "VeyonConfiguration.h"
 #include "VeyonMasterInterface.h"
 #include "VeyonServerInterface.h"
+#include "VeyonWorkerInterface.h"
 
 
 DemoFeaturePlugin::DemoFeaturePlugin( QObject* parent ) :
@@ -203,14 +206,14 @@ bool DemoFeaturePlugin::startFeature( VeyonMasterInterface& master, const Featur
 		auto demoClients = computerControlInterfaces;
 		demoClients.removeLocalHostInterfaces();
 
-		// start demo clients
+		// Start the demo server before clients so students do not wait on a
+		// 10s VNC connect timeout while the teacher port is still closed.
+		controlFeature( m_demoServerFeature.uid(), Operation::Start, {},
+						{ master.localSessionControlInterface().weakPointer() } );
+
 		controlFeature( feature == m_shareOwnScreenFullScreenFeature ? m_demoClientFullScreenFeature.uid()
 																	 : m_demoClientWindowFeature.uid(),
 						Operation::Start, {}, demoClients );
-
-		// start demo server
-		controlFeature( m_demoServerFeature.uid(), Operation::Start, {},
-						{ master.localSessionControlInterface().weakPointer() } );
 
 		return true;
 	}
@@ -246,7 +249,6 @@ bool DemoFeaturePlugin::startFeature( VeyonMasterInterface& master, const Featur
 			demoServerPort += sessionId;
 		}
 
-		// start demo clients
 		auto userDemoControlInterfaces = computerControlInterfaces;
 		userDemoControlInterfaces.removeAll( demoServerInterface );
 
@@ -261,23 +263,21 @@ bool DemoFeaturePlugin::startFeature( VeyonMasterInterface& master, const Featur
 			{ argToString(Argument::DemoServerPort), demoServerPort },
 		};
 
-		controlFeature( feature == m_shareUserScreenFullScreenFeature ? m_demoClientFullScreenFeature.uid()
-																	  : m_demoClientWindowFeature.uid(),
-						Operation::Start, demoClientArgs, userDemoControlInterfaces );
-
-		// teacher's local preview must not persist or lock input
-		auto previewArgs = demoClientArgs;
-		previewArgs.insert(argToString(Argument::LockInput), false);
-		controlFeature( m_demoClientWindowFeature.uid(), Operation::Start, previewArgs,
-						{ master.localSessionControlInterface().weakPointer() } );
-
-		// start demo server
 		controlFeature( m_demoServerFeature.uid(), Operation::Start,
 						{
 							{ argToString(Argument::VncServerPortOffset), vncServerPortOffset },
 							{ argToString(Argument::DemoServerPort), demoServerPort },
 							},
 						selectedComputerControlInterfaces );
+
+		controlFeature( feature == m_shareUserScreenFullScreenFeature ? m_demoClientFullScreenFeature.uid()
+																	  : m_demoClientWindowFeature.uid(),
+						Operation::Start, demoClientArgs, userDemoControlInterfaces );
+
+		auto previewArgs = demoClientArgs;
+		previewArgs.insert(argToString(Argument::LockInput), false);
+		controlFeature( m_demoClientWindowFeature.uid(), Operation::Start, previewArgs,
+						{ master.localSessionControlInterface().weakPointer() } );
 
 		return true;
 	}
@@ -434,7 +434,6 @@ bool DemoFeaturePlugin::handleFeatureMessage( VeyonServerInterface& server,
 
 bool DemoFeaturePlugin::handleFeatureMessage( VeyonWorkerInterface& worker, const FeatureMessage& message )
 {
-	Q_UNUSED(worker)
 
 	if( message.featureUid() == m_demoServerFeature.uid() )
 	{
@@ -463,7 +462,9 @@ bool DemoFeaturePlugin::handleFeatureMessage( VeyonWorkerInterface& worker, cons
 
 			return true;
 
-		default:
+		case FeatureCommand::StartDemoClient:
+		case FeatureCommand::StopDemoClient:
+		case FeatureCommand::FailsafeUnlock:
 			break;
 		}
 	}
@@ -484,6 +485,16 @@ bool DemoFeaturePlugin::handleFeatureMessage( VeyonWorkerInterface& worker, cons
 
 				vDebug() << "connecting with master" << demoServerHost;
 				m_demoClient = new DemoClient( demoServerHost, demoServerPort, isFullscreenDemo, viewport );
+				connect(m_demoClient, &DemoClient::failsafeUnlocked, this,
+						[this, &worker, featureUid = message.featureUid()]() {
+					worker.sendFeatureMessageReply(FeatureMessage{featureUid, FeatureCommand::FailsafeUnlock});
+					if (m_demoClient)
+					{
+						m_demoClient->deleteLater();
+						m_demoClient = nullptr;
+					}
+					QTimer::singleShot(0, []() { QCoreApplication::quit(); });
+				}, Qt::QueuedConnection);
 			}
 			return true;
 
@@ -495,9 +506,31 @@ bool DemoFeaturePlugin::handleFeatureMessage( VeyonWorkerInterface& worker, cons
 
 			return true;
 
-		default:
+		case FeatureCommand::StartDemoServer:
+		case FeatureCommand::StopDemoServer:
+		case FeatureCommand::FailsafeUnlock:
 			break;
 		}
+	}
+
+	return false;
+}
+
+
+
+bool DemoFeaturePlugin::handleFeatureMessageFromWorker(VeyonServerInterface& server, const FeatureMessage& message)
+{
+	Q_UNUSED(server)
+
+	if ((message.featureUid() == m_demoClientFullScreenFeature.uid() ||
+		 message.featureUid() == m_demoClientWindowFeature.uid()) &&
+		message.command<FeatureCommand>() == FeatureCommand::FailsafeUnlock)
+	{
+#ifdef Q_OS_WIN
+		FailsafePasswordState::clearPersistedInputLocks();
+		VeyonCore::platform().inputDeviceFunctions().enableInputDevices();
+#endif
+		return true;
 	}
 
 	return false;

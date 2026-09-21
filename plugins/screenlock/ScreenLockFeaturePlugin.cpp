@@ -27,6 +27,7 @@
 
 #include "ScreenLockFeaturePlugin.h"
 #include "ComputerControlInterface.h"
+#include "FailsafePasswordState.h"
 #include "FeatureWorkerManager.h"
 #include "LockWidget.h"
 #include "PersistentScreenLockState.h"
@@ -34,6 +35,7 @@
 #include "PlatformInputDeviceFunctions.h"
 #include "PlatformSessionFunctions.h"
 #include "VeyonServerInterface.h"
+#include "VeyonWorkerInterface.h"
 
 
 ScreenLockFeaturePlugin::ScreenLockFeaturePlugin( QObject* parent ) :
@@ -156,6 +158,8 @@ bool ScreenLockFeaturePlugin::handleFeatureMessage( VeyonServerInterface& server
 		{
 #ifdef Q_OS_WIN
 			PersistentScreenLockState::setLocked(message.featureUid());
+			// Block input first (Interception is immediate). Slow HID/powercfg
+			// work continues in the background and must not delay the lock UI.
 			VeyonCore::platform().inputDeviceFunctions().disableInputDevices();
 #endif
 		}
@@ -168,7 +172,6 @@ bool ScreenLockFeaturePlugin::handleFeatureMessage( VeyonServerInterface& server
 		}
 #endif
 
-		// forward message to worker
 		server.featureWorkerManager().sendMessageToManagedSystemWorker( message );
 
 		return true;
@@ -181,8 +184,6 @@ bool ScreenLockFeaturePlugin::handleFeatureMessage( VeyonServerInterface& server
 
 bool ScreenLockFeaturePlugin::handleFeatureMessage( VeyonWorkerInterface& worker, const FeatureMessage& message )
 {
-	Q_UNUSED(worker);
-
 	if( message.featureUid() == m_screenLockFeature.uid() ||
 		message.featureUid() == m_lockInputDevicesFeature.uid() )
 	{
@@ -201,6 +202,17 @@ bool ScreenLockFeaturePlugin::handleFeatureMessage( VeyonWorkerInterface& worker
 
 				m_lockWidget = new LockWidget( mode,
 											   QPixmap( QStringLiteral(":/screenlock/locked-screen-background.png" ) ) );
+				connect(m_lockWidget, &LockWidget::failsafeUnlocked, this,
+						[this, &worker, featureUid = message.featureUid()]() {
+					worker.sendFeatureMessageReply(FeatureMessage{featureUid, FeatureCommand::FailsafeUnlock});
+					if (m_lockWidget)
+					{
+						m_lockWidget->deleteLater();
+						m_lockWidget = nullptr;
+					}
+					VeyonCore::platform().coreFunctions().restoreScreenSaverSettings();
+					QTimer::singleShot(0, []() { QCoreApplication::quit(); });
+				}, Qt::QueuedConnection);
 			}
 			return true;
 
@@ -214,9 +226,29 @@ bool ScreenLockFeaturePlugin::handleFeatureMessage( VeyonWorkerInterface& worker
 
 			return true;
 
-		default:
+		case FeatureCommand::FailsafeUnlock:
 			break;
 		}
+	}
+
+	return false;
+}
+
+
+
+bool ScreenLockFeaturePlugin::handleFeatureMessageFromWorker(VeyonServerInterface& server, const FeatureMessage& message)
+{
+	Q_UNUSED(server)
+
+	if ((message.featureUid() == m_screenLockFeature.uid() ||
+		 message.featureUid() == m_lockInputDevicesFeature.uid()) &&
+		message.command<FeatureCommand>() == FeatureCommand::FailsafeUnlock)
+	{
+#ifdef Q_OS_WIN
+		FailsafePasswordState::clearPersistedInputLocks();
+		VeyonCore::platform().inputDeviceFunctions().enableInputDevices();
+#endif
+		return true;
 	}
 
 	return false;

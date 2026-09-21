@@ -26,8 +26,13 @@
 
 #include <interception.h>
 
+#include <QAtomicInt>
+#include <QMutex>
+
 #include "PlatformInputDeviceFunctions.h"
 #include "WindowsDeviceFunctions.h"
+
+class QThread;
 
 // clazy:excludeall=copyable-polymorphic
 
@@ -54,19 +59,26 @@ private:
 
 	void enableInterception();
 	void disableInterception();
+	void startInterceptionReceiveThread();
+	void stopInterceptionReceiveThread();
+	void runInterceptionReceiveLoop();
 	void initHIDServiceStatus();
 	void stopHIDService();
 	void restoreHIDService();
 	void setCustomPowerScheme();
 	void restorePowerScheme();
+	void finishDisablingInputDevices(int generation);
 
 	static bool installInterception();
 	static bool uninstallInterception();
 	static int interceptionInstaller( const QString& argument );
 
 	bool m_inputDevicesDisabled{false};
+	QAtomicInt m_inputDisableGeneration{0};
+	QMutex m_inputDeviceMutex;
 	WindowsDeviceFunctions::DeviceList m_disabledInputDevices{};
 	InterceptionContext m_interceptionContext{nullptr};
+	QThread* m_interceptionReceiveThread{nullptr};
 	QString m_hidServiceName{QStringLiteral("hidserv")};
 	bool m_hidServiceStatusInitialized{false};
 	bool m_hidServiceActivated{false};

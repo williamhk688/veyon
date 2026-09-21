@@ -12,7 +12,7 @@
    </rect>
   </property>
   <property name="windowTitle">
-   <string>About Veyon</string>
+   <string>About CYC Veyon</string>
   </property>
   <property name="windowIcon">
    <iconset resource="../resources/core.qrc">
@@ -80,7 +80,7 @@
         </font>
        </property>
        <property name="text">
-        <string>About Veyon</string>
+        <string>About CYC Veyon</string>
        </property>
       </widget>
      </item>

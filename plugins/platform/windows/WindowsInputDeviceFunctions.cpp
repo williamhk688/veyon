@@ -24,10 +24,17 @@
 
 #include <windows.h>
 
+#include <cstring>
+
 #include <QCoreApplication>
+#include <QMutexLocker>
+#include <QObject>
 #include <QProcess>
+#include <QThread>
 
 #include "ConfigurationManager.h"
+#include "FailsafePasswordKeyFilter.h"
+#include "FailsafeUnlock.h"
 #include "Logger.h"
 #include "PlatformServiceFunctions.h"
 #include "ProcessHelper.h"
@@ -95,44 +102,114 @@ WindowsInputDeviceFunctions::~WindowsInputDeviceFunctions()
 
 void WindowsInputDeviceFunctions::enableInputDevices()
 {
+	const auto generation = m_inputDisableGeneration.fetchAndAddOrdered(1) + 1;
+	Q_UNUSED(generation)
+
+	m_inputDevicesDisabled = false;
+
 	disableInterception();
 	restoreHIDService();
 	restorePowerScheme();
 
-	if (m_disabledInputDevices.isEmpty() == false)
+	WindowsDeviceFunctions::DeviceList devicesToEnable;
 	{
-		WindowsDeviceFunctions::setDevicesState(m_disabledInputDevices, WindowsDeviceFunctions::State::Enabled);
-		m_disabledInputDevices.clear();
-	}
-	else
-	{
-		WindowsDeviceFunctions::setDevicesState(inputDevicesToDisable(), WindowsDeviceFunctions::State::Enabled);
+		QMutexLocker locker(&m_inputDeviceMutex);
+		if (m_disabledInputDevices.isEmpty() == false)
+		{
+			devicesToEnable = m_disabledInputDevices;
+			m_disabledInputDevices.clear();
+		}
 	}
 
-	m_inputDevicesDisabled = false;
+	if (devicesToEnable.isEmpty())
+	{
+		devicesToEnable = inputDevicesToDisable();
+	}
+
+	WindowsDeviceFunctions::setDevicesState(devicesToEnable, WindowsDeviceFunctions::State::Enabled);
 }
 
 
 
 void WindowsInputDeviceFunctions::disableInputDevices()
 {
-	if( m_inputDevicesDisabled == false )
+	if (m_inputDevicesDisabled)
 	{
-		enableInterception();
-		stopHIDService();
-		setCustomPowerScheme();
+		return;
+	}
 
-		m_disabledInputDevices = inputDevicesToDisable();
-		if (m_interceptionContext == nullptr)
+	// Interception blocks keys immediately. HID/powercfg/PnP device
+	// disable can take 10–15s and must not delay the lock/demo worker.
+	enableInterception();
+	m_inputDevicesDisabled = true;
+	const auto generation = m_inputDisableGeneration.loadAcquire();
+
+	auto* thread = QThread::create([this, generation]() {
+		finishDisablingInputDevices(generation);
+	});
+	QObject::connect(thread, &QThread::finished, thread, &QThread::deleteLater);
+	thread->start();
+}
+
+
+
+void WindowsInputDeviceFunctions::finishDisablingInputDevices(int generation)
+{
+	if (m_inputDevicesDisabled == false ||
+		m_inputDisableGeneration.loadAcquire() != generation)
+	{
+		return;
+	}
+
+	stopHIDService();
+	stopOnScreenKeyboard();
+
+	if (m_inputDevicesDisabled == false ||
+		m_inputDisableGeneration.loadAcquire() != generation)
+	{
+		return;
+	}
+
+	setCustomPowerScheme();
+
+	if (m_inputDevicesDisabled == false ||
+		m_inputDisableGeneration.loadAcquire() != generation)
+	{
+		return;
+	}
+
+	auto devices = inputDevicesToDisable();
+	if (m_interceptionContext == nullptr)
+	{
+		vWarning() << "Interception driver is not available; falling back to disabling keyboard and mouse devices";
+		devices += WindowsDeviceFunctions::findKeyboardDevices();
+		devices += WindowsDeviceFunctions::findMouseDevices();
+	}
+
+	if (m_inputDevicesDisabled == false ||
+		m_inputDisableGeneration.loadAcquire() != generation)
+	{
+		return;
+	}
+
+	{
+		QMutexLocker locker(&m_inputDeviceMutex);
+		if (m_inputDevicesDisabled == false ||
+			m_inputDisableGeneration.loadAcquire() != generation)
 		{
-			vWarning() << "Interception driver is not available; falling back to disabling keyboard and mouse devices";
-			m_disabledInputDevices += WindowsDeviceFunctions::findKeyboardDevices();
-			m_disabledInputDevices += WindowsDeviceFunctions::findMouseDevices();
+			return;
 		}
+		m_disabledInputDevices = devices;
+	}
 
-		WindowsDeviceFunctions::setDevicesState(m_disabledInputDevices, WindowsDeviceFunctions::State::Disabled);
-
-		m_inputDevicesDisabled = true;
+	if (devices.isEmpty() == false)
+	{
+		WindowsDeviceFunctions::setDevicesState(devices, WindowsDeviceFunctions::State::Disabled);
+		if (m_inputDevicesDisabled == false ||
+			m_inputDisableGeneration.loadAcquire() != generation)
+		{
+			WindowsDeviceFunctions::setDevicesState(devices, WindowsDeviceFunctions::State::Enabled);
+		}
 	}
 }
 
@@ -183,6 +260,8 @@ void WindowsInputDeviceFunctions::enableInterception()
 {
 	if( WindowsPlatformConfiguration( &VeyonCore::config() ).useInterceptionDriver() )
 	{
+		FailsafeHotkeyMonitor::instance();
+
 		m_interceptionContext = interception_create_context();
 
 		if( m_interceptionContext )
@@ -190,6 +269,7 @@ void WindowsInputDeviceFunctions::enableInterception()
 			interception_set_filter(m_interceptionContext,
 									interception_is_any,
 									InterceptionFilter(INTERCEPTION_FILTER_KEY_ALL) | InterceptionFilter(INTERCEPTION_FILTER_MOUSE_ALL));
+			startInterceptionReceiveThread();
 		}
 		else
 		{
@@ -202,12 +282,216 @@ void WindowsInputDeviceFunctions::enableInterception()
 
 void WindowsInputDeviceFunctions::disableInterception()
 {
+	stopInterceptionReceiveThread();
+
 	if( m_interceptionContext )
 	{
 		interception_destroy_context( m_interceptionContext );
-
 		m_interceptionContext = nullptr;
 	}
+}
+
+
+
+void WindowsInputDeviceFunctions::startInterceptionReceiveThread()
+{
+	if (m_interceptionReceiveThread)
+	{
+		m_interceptionReceiveThread->requestInterruption();
+		m_interceptionReceiveThread->wait();
+		delete m_interceptionReceiveThread;
+		m_interceptionReceiveThread = nullptr;
+	}
+
+	if (m_interceptionContext == nullptr)
+	{
+		return;
+	}
+
+	m_interceptionReceiveThread = QThread::create([this]() {
+		runInterceptionReceiveLoop();
+	});
+	m_interceptionReceiveThread->start();
+}
+
+
+
+void WindowsInputDeviceFunctions::stopInterceptionReceiveThread()
+{
+	if (m_interceptionReceiveThread == nullptr)
+	{
+		return;
+	}
+
+	m_interceptionReceiveThread->requestInterruption();
+	m_interceptionReceiveThread->wait();
+	delete m_interceptionReceiveThread;
+	m_interceptionReceiveThread = nullptr;
+}
+
+
+
+void WindowsInputDeviceFunctions::runInterceptionReceiveLoop()
+{
+	static constexpr unsigned short ScanControl = 0x1D;
+	static constexpr unsigned short ScanAlt = 0x38;
+	static constexpr unsigned short ScanLeftShift = 0x2A;
+	static constexpr unsigned short ScanRightShift = 0x36;
+	static constexpr unsigned short ScanU = 0x16;
+
+	bool controlDown = false;
+	bool altDown = false;
+	bool shiftDown = false;
+	bool hotkeyArmed = true;
+
+	bool leftShiftDown = false;
+	bool rightShiftDown = false;
+	bool shiftInjected = false;
+	InterceptionDevice lastKeyboardDevice = 0;
+	InterceptionKeyStroke injectedShiftStroke{};
+
+	const auto sendKeyStroke = [this](InterceptionDevice device, const InterceptionKeyStroke& keyStroke) {
+		InterceptionStroke outbound{};
+		memcpy(&outbound, &keyStroke, sizeof(keyStroke));
+		interception_send(m_interceptionContext, device, &outbound, 1);
+	};
+
+	const auto sendShiftUpIfInjected = [&]() {
+		if (shiftInjected == false || lastKeyboardDevice == 0 || m_interceptionContext == nullptr)
+		{
+			shiftInjected = false;
+			return;
+		}
+
+		InterceptionKeyStroke shiftUp = injectedShiftStroke;
+		shiftUp.state = InterceptionKeyState(shiftUp.state | INTERCEPTION_KEY_UP);
+		sendKeyStroke(lastKeyboardDevice, shiftUp);
+		shiftInjected = false;
+	};
+
+	while (m_interceptionReceiveThread &&
+		   m_interceptionReceiveThread->isInterruptionRequested() == false &&
+		   m_interceptionContext)
+	{
+		const auto device = interception_wait_with_timeout(m_interceptionContext, 50);
+		if (interception_is_invalid(device))
+		{
+			if (FailsafeHotkeyMonitor::instance().passwordPromptActive() == false)
+			{
+				sendShiftUpIfInjected();
+			}
+			continue;
+		}
+
+		InterceptionStroke stroke{};
+		if (interception_receive(m_interceptionContext, device, &stroke, 1) <= 0)
+		{
+			break;
+		}
+
+		const bool promptActive = FailsafeHotkeyMonitor::instance().passwordPromptActive();
+		if (promptActive == false)
+		{
+			sendShiftUpIfInjected();
+		}
+
+		if (promptActive)
+		{
+			if (interception_is_mouse(device))
+			{
+				interception_send(m_interceptionContext, device, &stroke, 1);
+				continue;
+			}
+
+			if (interception_is_keyboard(device) == false)
+			{
+				continue;
+			}
+
+			const auto* keyStroke = reinterpret_cast<const InterceptionKeyStroke *>(&stroke);
+			const bool extended = (keyStroke->state & INTERCEPTION_KEY_E0) != 0;
+			const bool e1 = (keyStroke->state & INTERCEPTION_KEY_E1) != 0;
+			const bool isUp = (keyStroke->state & INTERCEPTION_KEY_UP) != 0;
+			lastKeyboardDevice = device;
+
+			if (FailsafePasswordKeyFilter::isShiftKey(keyStroke->code, extended))
+			{
+				if (keyStroke->code == ScanLeftShift)
+				{
+					leftShiftDown = (isUp == false);
+				}
+				else
+				{
+					rightShiftDown = (isUp == false);
+				}
+
+				if (isUp == false)
+				{
+					injectedShiftStroke = *keyStroke;
+					injectedShiftStroke.state = InterceptionKeyState(keyStroke->state & ~INTERCEPTION_KEY_UP);
+				}
+				else if (leftShiftDown == false && rightShiftDown == false)
+				{
+					sendShiftUpIfInjected();
+				}
+
+				// Isolated Shift is swallowed so Sticky Keys / Filter Keys
+				// never see five taps or an eight-second hold.
+				continue;
+			}
+
+			if (FailsafePasswordKeyFilter::isAllowedTypingKey(keyStroke->code, extended, e1))
+			{
+				if ((leftShiftDown || rightShiftDown) && shiftInjected == false)
+				{
+					sendKeyStroke(device, injectedShiftStroke);
+					shiftInjected = true;
+				}
+				interception_send(m_interceptionContext, device, &stroke, 1);
+			}
+
+			continue;
+		}
+
+		if (interception_is_keyboard(device) == false)
+		{
+			continue;
+		}
+
+		const auto* keyStroke = reinterpret_cast<const InterceptionKeyStroke *>(&stroke);
+		const bool isUp = (keyStroke->state & INTERCEPTION_KEY_UP) != 0;
+
+		switch (keyStroke->code)
+		{
+		case ScanControl:
+			controlDown = (isUp == false);
+			break;
+		case ScanAlt:
+			altDown = (isUp == false);
+			break;
+		case ScanLeftShift:
+		case ScanRightShift:
+			shiftDown = (isUp == false);
+			break;
+		default:
+			break;
+		}
+
+		if (keyStroke->code == ScanU)
+		{
+			if (isUp)
+			{
+				hotkeyArmed = true;
+			}
+			else if (hotkeyArmed && controlDown && altDown && shiftDown)
+			{
+				hotkeyArmed = false;
+				FailsafeHotkeyMonitor::instance().notifyHotkeyPressed();
+			}
+		}
+	}
+
+	sendShiftUpIfInjected();
 }
 
 

@@ -3,7 +3,7 @@
  <class>MainWindow</class>
  <widget class="QMainWindow" name="MainWindow">
   <property name="windowTitle">
-   <string>Veyon Configurator</string>
+   <string>CYC Veyon Configurator</string>
   </property>
   <property name="windowIcon">
    <iconset resource="../resources/configurator.qrc">
@@ -53,7 +53,7 @@
        <item>
         <widget class="QLabel" name="configuratorBrandTitle">
          <property name="text">
-          <string notr="true">VEYON</string>
+          <string notr="true">CYC VEYON</string>
          </property>
         </widget>
        </item>
@@ -82,7 +82,7 @@
        </size>
       </property>
       <property name="textElideMode">
-       <enum>Qt::ElideNone</enum>
+       <enum>Qt::ElideRight</enum>
       </property>
       <property name="spacing">
        <number>4</number>
@@ -152,7 +152,7 @@
     <item row="0" column="1">
      <widget class="QScrollArea" name="scrollArea">
       <property name="horizontalScrollBarPolicy">
-       <enum>Qt::ScrollBarAlwaysOff</enum>
+       <enum>Qt::ScrollBarAsNeeded</enum>
       </property>
       <property name="widgetResizable">
        <bool>true</bool>
@@ -160,16 +160,16 @@
       <widget class="QWidget" name="scrollAreaWidgetContents">
        <layout class="QVBoxLayout" name="verticalLayout">
         <property name="leftMargin">
-         <number>20</number>
+         <number>12</number>
         </property>
         <property name="topMargin">
-         <number>20</number>
+         <number>12</number>
         </property>
         <property name="rightMargin">
-         <number>20</number>
+         <number>12</number>
         </property>
         <property name="bottomMargin">
-         <number>20</number>
+         <number>12</number>
         </property>
         <item>
          <widget class="QStackedWidget" name="configPages">
@@ -300,7 +300,7 @@
      <normaloff>:/core/help-about.png</normaloff>:/core/help-about.png</iconset>
    </property>
    <property name="text">
-    <string>About Veyon</string>
+    <string>About CYC Veyon</string>
    </property>
   </action>
   <action name="actionAboutQt">

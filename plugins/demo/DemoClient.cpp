@@ -23,9 +23,13 @@
  */
 
 #include <QApplication>
+#include <QEvent>
 #include <QIcon>
+#include <QKeyEvent>
+#include <QShortcut>
 
 #include "DemoClient.h"
+#include "FailsafeUnlock.h"
 #include "LockWidget.h"
 #include "PlatformCoreFunctions.h"
 #include "VncViewWidget.h"
@@ -46,10 +50,23 @@ DemoClient::DemoClient( const QString& host, int port, bool fullscreen, QRect vi
 		m_toplevel->move(0, 0);
 	}
 
-	m_toplevel->setWindowTitle(tr("Veyon Demo"));
+	m_toplevel->setWindowTitle(tr("CYC Veyon Demo"));
 	m_toplevel->setWindowIcon( QPixmap( QStringLiteral(":/core/icon64.png") ) );
 	m_toplevel->setAttribute( Qt::WA_DeleteOnClose, false );
 	m_toplevel->installEventFilter(this);
+
+	if (auto* lockWidget = qobject_cast<LockWidget *>(m_toplevel))
+	{
+		connect(lockWidget, &LockWidget::failsafeUnlocked, this, &DemoClient::failsafeUnlocked);
+	}
+	else
+	{
+		auto* failsafeShortcut = new QShortcut(QKeySequence(QLatin1String(FailsafeUnlock::HotkeySequence)), m_toplevel);
+		failsafeShortcut->setContext(Qt::ApplicationShortcut);
+		connect(failsafeShortcut, &QShortcut::activated, this, &DemoClient::promptFailsafeUnlock);
+		connect(&FailsafeHotkeyMonitor::instance(), &FailsafeHotkeyMonitor::hotkeyPressed,
+				this, &DemoClient::promptFailsafeUnlock);
+	}
 
 	m_vncView = new VncViewWidget( m_computerControlInterface, viewport, m_toplevel );
 
@@ -87,6 +104,16 @@ bool DemoClient::eventFilter(QObject* watched, QEvent* event)
 		return true;
 	}
 
+	if (watched == m_toplevel && event->type() == QEvent::KeyPress &&
+		qobject_cast<LockWidget *>(m_toplevel) == nullptr)
+	{
+		if (FailsafeHotkeyMonitor::isUnlockHotkey(static_cast<QKeyEvent *>(event)))
+		{
+			promptFailsafeUnlock();
+			return true;
+		}
+	}
+
 	return QObject::eventFilter(watched, event);
 }
 
@@ -115,4 +142,23 @@ void DemoClient::resizeToplevelWidget()
 	{
 		m_toplevel->resize(m_vncView->sizeHint());
 	}
+}
+
+
+
+void DemoClient::promptFailsafeUnlock()
+{
+	if (m_failsafePromptOpen || m_toplevel == nullptr)
+	{
+		return;
+	}
+
+	m_failsafePromptOpen = true;
+	if (FailsafeUnlock::prompt(m_toplevel))
+	{
+		Q_EMIT failsafeUnlocked();
+		return;
+	}
+
+	m_failsafePromptOpen = false;
 }
