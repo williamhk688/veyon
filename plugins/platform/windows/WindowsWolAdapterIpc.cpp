@@ -50,7 +50,7 @@ bool isAuthorizedClient(QLocalSocket* socket)
 	}
 
 	wchar_t clientPathBuffer[32768] = {};
-	DWORD clientPathLength = DWORD(std::size(clientPathBuffer));
+	DWORD clientPathLength = DWORD(sizeof(clientPathBuffer) / sizeof(clientPathBuffer[0]));
 	const bool gotClientPath =
 			QueryFullProcessImageNameW(process, 0, clientPathBuffer, &clientPathLength) != FALSE;
 	CloseHandle(process);
@@ -63,8 +63,8 @@ bool isAuthorizedClient(QLocalSocket* socket)
 
 	wchar_t servicePathBuffer[32768] = {};
 	const DWORD servicePathLength =
-			GetModuleFileNameW(nullptr, servicePathBuffer, DWORD(std::size(servicePathBuffer)));
-	if (servicePathLength == 0 || servicePathLength >= std::size(servicePathBuffer))
+			GetModuleFileNameW(nullptr, servicePathBuffer, DWORD(sizeof(servicePathBuffer) / sizeof(servicePathBuffer[0])));
+	if (servicePathLength == 0 || servicePathLength >= sizeof(servicePathBuffer) / sizeof(servicePathBuffer[0]))
 	{
 		vWarning() << "can't query Veyon Service image path";
 		return false;
