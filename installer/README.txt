@@ -1,8 +1,8 @@
 CYC Veyon 4.11.2 (based on Veyon) — Windows 64-bit installer
 ============================================================
 
-Test package: WOL Ethernet enable, verify SetIfEntry actually worked
-  Source: 5586726b
+Test package: NCPA-visible Ethernet enable (netsh)
+  Source: e4fa7637
   Branch: cursor/wol-nic-enable-fix-ecca
 
 Direct download:
@@ -10,18 +10,15 @@ Direct download:
   https://github.com/williamhk688/veyon/raw/cursor/wol-nic-enable-fix-ecca/installer/veyon_4_11_2_win64_modified_setup.exe
 
 SHA-256:
-  0c1efdf0ba52f98dcc3f4173837e1123f34c57673fe27575847e9e2ddc6b686b
+  0c7c12782d4e188f16f7028e54a95470555c2351ea4a002dae179baf556bcac6
 
-The previous log showed the helper ran and SetIfEntry claimed success on
-interface 20, then restored it 5 seconds later. Windows can report
-SetIfEntry success without changing the adapter. This build checks the
-real admin status and falls back to netsh if the NIC stays disabled.
+Previous log showed SetIfEntry changing MIB status for Intel I219-V, but
+ncpa.cpl stayed 已停用. This build uses netsh first (same as the adapter
+window), then INetConnection/SetupDi.
 
-Close Master, install as administrator, then open:
+Watch 乙太網路 (Intel), not 乙太網路 2/3. With no cable it should look
+like 乙太網路 2: 已拔除網路線, for about 8 seconds, then 已停用 again.
+
+Close Master, install as administrator, open:
 
   C:\Program Files\Veyon\veyon-master.exe
-
-Watch Intel Ethernet, click Power on. If it still does not flash, send
-the new:
-
-  C:\ProgramData\Veyon\wol-adapter.log
