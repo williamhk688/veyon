@@ -15,6 +15,8 @@
 #include <setupapi.h>
 #include <devguid.h>
 #include <sddl.h>
+#include <objbase.h>
+#include <netcon.h>
 
 #include <QDateTime>
 #include <QDir>
@@ -22,6 +24,7 @@
 #include <QFile>
 #include <QHostAddress>
 #include <QMutex>
+#include <QStringList>
 #include <QThread>
 #include <QUuid>
 
@@ -320,31 +323,6 @@ bool setIfEntryAdminStatus(unsigned long interfaceIndex, bool enabled)
 	return true;
 }
 
-bool adapterAdminMatches(unsigned long interfaceIndex, bool enabled, int timeoutMs)
-{
-	QElapsedTimer timer;
-	timer.start();
-	AdapterInfo adapter;
-	while (timer.elapsed() < timeoutMs)
-	{
-		adapter = adapterByIndex(interfaceIndex);
-		const bool isUp = adapter.index != 0 && adapter.adminStatus == NET_IF_ADMIN_STATUS_UP;
-		if (isUp == enabled)
-		{
-			return true;
-		}
-		QThread::msleep(50);
-	}
-
-	WindowsWolAdapterControl::log(QStringLiteral("status mismatch %1 wantEnabled %2 admin %3 oper %4 alias %5")
-								  .arg(interfaceIndex)
-								  .arg(enabled)
-								  .arg(adapter.adminStatus)
-								  .arg(adapter.operStatus)
-								  .arg(adapter.alias));
-	return false;
-}
-
 void logAdapters(const QString& reason)
 {
 	WindowsWolAdapterControl::log(reason);
@@ -441,23 +419,8 @@ bool setSetupDiAdminStatus(unsigned long interfaceIndex, bool enabled)
 	return success;
 }
 
-bool setNetshAdminStatus(const QString& alias, bool enabled)
+bool runHiddenCommand(const QString& command)
 {
-	if (alias.isEmpty())
-	{
-		return false;
-	}
-
-	wchar_t systemRoot[MAX_PATH] = {};
-	if (GetEnvironmentVariableW(L"SystemRoot", systemRoot, MAX_PATH) == 0)
-	{
-		wcsncpy(systemRoot, L"C:\\Windows", MAX_PATH - 1);
-	}
-
-	const QString command = QStringLiteral("\"%1\\System32\\netsh.exe\" interface set interface name=\"%2\" admin=%3")
-							.arg(QString::fromWCharArray(systemRoot),
-								 alias,
-								 enabled ? QStringLiteral("ENABLED") : QStringLiteral("DISABLED"));
 	wchar_t commandLine[1024] = {};
 	const int length = command.toWCharArray(commandLine);
 	if (length <= 0 || length >= int(sizeof(commandLine) / sizeof(commandLine[0])) - 1)
@@ -474,7 +437,7 @@ bool setNetshAdminStatus(const QString& alias, bool enabled)
 	if (CreateProcessW(nullptr, commandLine, nullptr, nullptr, FALSE,
 					   CREATE_NO_WINDOW, nullptr, nullptr, &startupInfo, &processInfo) == FALSE)
 	{
-		WindowsWolAdapterControl::log(QStringLiteral("netsh CreateProcess failed %1 for %2").arg(GetLastError()).arg(alias));
+		WindowsWolAdapterControl::log(QStringLiteral("CreateProcess failed %1 for %2").arg(GetLastError()).arg(command));
 		return false;
 	}
 
@@ -483,12 +446,124 @@ bool setNetshAdminStatus(const QString& alias, bool enabled)
 	GetExitCodeProcess(processInfo.hProcess, &exitCode);
 	CloseHandle(processInfo.hThread);
 	CloseHandle(processInfo.hProcess);
-
-	WindowsWolAdapterControl::log(QStringLiteral("netsh %1 admin=%2 wait=%3 exit=%4")
-								  .arg(alias, enabled ? QStringLiteral("ENABLED") : QStringLiteral("DISABLED"))
-								  .arg(waited)
-								  .arg(exitCode));
+	WindowsWolAdapterControl::log(QStringLiteral("command exit %1 wait %2: %3").arg(exitCode).arg(waited).arg(command));
 	return waited == WAIT_OBJECT_0 && exitCode == 0;
+}
+
+bool setNetshAdminStatus(const QString& alias, bool enabled)
+{
+	if (alias.isEmpty())
+	{
+		return false;
+	}
+
+	wchar_t systemRoot[MAX_PATH] = {};
+	if (GetEnvironmentVariableW(L"SystemRoot", systemRoot, MAX_PATH) == 0)
+	{
+		wcsncpy(systemRoot, L"C:\\Windows", MAX_PATH - 1);
+	}
+
+	const QString netsh = QStringLiteral("\"%1\\System32\\netsh.exe\"").arg(QString::fromWCharArray(systemRoot));
+	const QString admin = enabled ? QStringLiteral("ENABLED") : QStringLiteral("DISABLED");
+	const QStringList commands{
+		QStringLiteral("%1 interface set interface name=\"%2\" admin=%3").arg(netsh, alias, admin),
+		QStringLiteral("%1 interface set interface \"%2\" admin=%3").arg(netsh, alias, admin),
+		QStringLiteral("%1 interface set interface name=\"%2\" admin=%3")
+			.arg(netsh, alias, enabled ? QStringLiteral("enable") : QStringLiteral("disable"))
+	};
+
+	for (const auto& command : commands)
+	{
+		if (runHiddenCommand(command))
+		{
+			QThread::msleep(400);
+			return true;
+		}
+	}
+
+	return false;
+}
+
+void freeNetconProperties(NETCON_PROPERTIES* properties)
+{
+	if (properties == nullptr)
+	{
+		return;
+	}
+
+	CoTaskMemFree(properties->pszwName);
+	CoTaskMemFree(properties->pszwDeviceName);
+	CoTaskMemFree(properties);
+}
+
+bool setNetConnectionEnabled(const QString& alias, bool enabled)
+{
+	if (alias.isEmpty() || enabled == false)
+	{
+		return false;
+	}
+
+	const HRESULT initialized = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+	const bool uninitialize = initialized == S_OK;
+
+	static const GUID kClsidConnectionManager =
+		{0xBA126AD1, 0x2166, 0x11D1, {0xB1, 0xD0, 0x00, 0x80, 0x5F, 0xC1, 0x27, 0x0E}};
+	static const GUID kIidINetConnectionManager =
+		{0xC08956A2, 0x1CD3, 0x11D1, {0xB1, 0xC5, 0x00, 0x80, 0x5F, 0xC1, 0x27, 0x0E}};
+
+	INetConnectionManager* manager = nullptr;
+	HRESULT hr = CoCreateInstance(kClsidConnectionManager, nullptr, CLSCTX_ALL,
+								  kIidINetConnectionManager, reinterpret_cast<void**>(&manager));
+	if (FAILED(hr) || manager == nullptr)
+	{
+		WindowsWolAdapterControl::log(QStringLiteral("INetConnectionManager failed %1").arg(int(hr)));
+		if (uninitialize)
+		{
+			CoUninitialize();
+		}
+		return false;
+	}
+
+	IEnumNetConnection* enumerator = nullptr;
+	hr = manager->EnumConnections(NCME_DEFAULT, &enumerator);
+	bool success = false;
+	if (SUCCEEDED(hr) && enumerator)
+	{
+		INetConnection* connection = nullptr;
+		ULONG fetched = 0;
+		while (enumerator->Next(1, &connection, &fetched) == S_OK && connection)
+		{
+			NETCON_PROPERTIES* properties = nullptr;
+			if (SUCCEEDED(connection->GetProperties(&properties)) && properties)
+			{
+				const QString name = QString::fromWCharArray(properties->pszwName);
+				const QString device = QString::fromWCharArray(properties->pszwDeviceName);
+				WindowsWolAdapterControl::log(QStringLiteral("netcon %1 | %2 status %3")
+											  .arg(name, device)
+											  .arg(int(properties->Status)));
+				if (name.compare(alias, Qt::CaseInsensitive) == 0)
+				{
+					hr = connection->Connect();
+					WindowsWolAdapterControl::log(QStringLiteral("INetConnection::Connect %1 hr %2").arg(alias).arg(int(hr)));
+					success = SUCCEEDED(hr);
+				}
+				freeNetconProperties(properties);
+			}
+			connection->Release();
+			if (success)
+			{
+				break;
+			}
+		}
+		enumerator->Release();
+	}
+
+	manager->Release();
+	if (uninitialize)
+	{
+		CoUninitialize();
+	}
+	return success;
 }
 
 AdapterInfo adapterByIndex(unsigned long interfaceIndex)
@@ -648,31 +723,34 @@ bool WindowsWolAdapterControl::canTemporarilyEnableAdapter(unsigned long interfa
 bool WindowsWolAdapterControl::setAdminStatusNative(unsigned long interfaceIndex, bool enabled)
 {
 	const auto before = adapterByIndex(interfaceIndex);
-	log(QStringLiteral("native %1 %2 | %3 wantEnabled %4 admin %5")
+	log(QStringLiteral("native %1 %2 | %3 wantEnabled %4 admin %5 oper %6")
 		.arg(interfaceIndex)
 		.arg(before.alias)
 		.arg(before.description)
 		.arg(enabled)
-		.arg(before.adminStatus));
+		.arg(before.adminStatus)
+		.arg(before.operStatus));
 
-	if (setIfEntryAdminStatus(interfaceIndex, enabled) && adapterAdminMatches(interfaceIndex, enabled, 1000))
+	// SetIfEntry can report success without changing ncpa.cpl. Use netsh first.
+	if (setNetshAdminStatus(before.alias, enabled))
 	{
-		log(QStringLiteral("SetIfEntry verified %1 enabled %2").arg(interfaceIndex).arg(enabled));
+		log(QStringLiteral("netsh changed %1 enabled %2").arg(before.alias).arg(enabled));
 		return true;
 	}
 
-	if (setSetupDiAdminStatus(interfaceIndex, enabled) && adapterAdminMatches(interfaceIndex, enabled, 1500))
+	if (enabled && setNetConnectionEnabled(before.alias, true))
 	{
-		log(QStringLiteral("SetupDi verified %1 enabled %2").arg(interfaceIndex).arg(enabled));
+		log(QStringLiteral("INetConnection enabled %1").arg(before.alias));
 		return true;
 	}
 
-	if (setNetshAdminStatus(before.alias, enabled) && adapterAdminMatches(interfaceIndex, enabled, 2000))
+	if (setSetupDiAdminStatus(interfaceIndex, enabled))
 	{
-		log(QStringLiteral("netsh verified %1 enabled %2").arg(interfaceIndex).arg(enabled));
+		log(QStringLiteral("SetupDi changed %1 enabled %2").arg(interfaceIndex).arg(enabled));
 		return true;
 	}
 
+	setIfEntryAdminStatus(interfaceIndex, enabled);
 	log(QStringLiteral("native enable/disable failed for %1 enabled %2 lastError %3")
 		.arg(interfaceIndex)
 		.arg(enabled)
