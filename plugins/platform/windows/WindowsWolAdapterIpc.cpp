@@ -201,6 +201,11 @@ void handleConnectedClient(HANDLE pipe, HANDLE stopEvent)
 	quint32 enabled = 0;
 	in >> command >> interfaceIndex >> enabled;
 
+	WindowsWolAdapterControl::dumpAdapters(QStringLiteral("helper request command %1 interface %2 enabled %3")
+				.arg(command)
+				.arg(interfaceIndex)
+				.arg(enabled));
+
 	quint32 result = 0;
 	if (command == 1 &&
 		WindowsWolAdapterControl::canTemporarilyEnableAdapter(interfaceIndex))

@@ -14,6 +14,7 @@
 #include <ws2ipdef.h>
 #include <setupapi.h>
 #include <devguid.h>
+#include <sddl.h>
 
 #include <QDateTime>
 #include <QDir>
@@ -82,6 +83,8 @@ struct AdapterInfo
 	QHostAddress ipv4;
 	int prefixLength = 0;
 };
+
+AdapterInfo adapterByIndex(unsigned long interfaceIndex);
 
 bool isWifi(IFTYPE type)
 {
@@ -317,6 +320,56 @@ bool setIfEntryAdminStatus(unsigned long interfaceIndex, bool enabled)
 	return true;
 }
 
+bool adapterAdminMatches(unsigned long interfaceIndex, bool enabled, int timeoutMs)
+{
+	QElapsedTimer timer;
+	timer.start();
+	AdapterInfo adapter;
+	while (timer.elapsed() < timeoutMs)
+	{
+		adapter = adapterByIndex(interfaceIndex);
+		const bool isUp = adapter.index != 0 && adapter.adminStatus == NET_IF_ADMIN_STATUS_UP;
+		if (isUp == enabled)
+		{
+			return true;
+		}
+		QThread::msleep(50);
+	}
+
+	WindowsWolAdapterControl::log(QStringLiteral("status mismatch %1 wantEnabled %2 admin %3 oper %4 alias %5")
+								  .arg(interfaceIndex)
+								  .arg(enabled)
+								  .arg(adapter.adminStatus)
+								  .arg(adapter.operStatus)
+								  .arg(adapter.alias));
+	return false;
+}
+
+void logAdapters(const QString& reason)
+{
+	WindowsWolAdapterControl::log(reason);
+	const auto adapters = enumerateAdapters();
+	if (adapters.isEmpty())
+	{
+		WindowsWolAdapterControl::log(QStringLiteral("adapter list empty"));
+		return;
+	}
+
+	for (const auto& adapter : adapters)
+	{
+		WindowsWolAdapterControl::log(
+			QStringLiteral("adapter %1 type %2 hw %3 virtual %4 admin %5 oper %6 %7 | %8")
+				.arg(adapter.index)
+				.arg(adapter.type)
+				.arg(adapter.hardware)
+				.arg(looksVirtual(adapter))
+				.arg(adapter.adminStatus)
+				.arg(adapter.operStatus)
+				.arg(adapter.alias)
+				.arg(adapter.description));
+	}
+}
+
 bool setSetupDiAdminStatus(unsigned long interfaceIndex, bool enabled)
 {
 	NET_LUID luid{};
@@ -476,6 +529,7 @@ private:
 	void prepare(const QList<QHostAddress>& targetHosts)
 	{
 		auto adapter = chooseEthernetAdapter(enumerateAdapters(), targetHosts);
+		logAdapters(QStringLiteral("Power On adapter scan"));
 		if (adapter.index == 0)
 		{
 			vWarning() << "no Ethernet adapter found for Wake-on-LAN";
@@ -593,21 +647,29 @@ bool WindowsWolAdapterControl::canTemporarilyEnableAdapter(unsigned long interfa
 
 bool WindowsWolAdapterControl::setAdminStatusNative(unsigned long interfaceIndex, bool enabled)
 {
-	if (setIfEntryAdminStatus(interfaceIndex, enabled))
+	const auto before = adapterByIndex(interfaceIndex);
+	log(QStringLiteral("native %1 %2 | %3 wantEnabled %4 admin %5")
+		.arg(interfaceIndex)
+		.arg(before.alias)
+		.arg(before.description)
+		.arg(enabled)
+		.arg(before.adminStatus));
+
+	if (setIfEntryAdminStatus(interfaceIndex, enabled) && adapterAdminMatches(interfaceIndex, enabled, 1000))
 	{
-		log(QStringLiteral("SetIfEntry %1 enabled %2").arg(interfaceIndex).arg(enabled));
+		log(QStringLiteral("SetIfEntry verified %1 enabled %2").arg(interfaceIndex).arg(enabled));
 		return true;
 	}
 
-	if (setSetupDiAdminStatus(interfaceIndex, enabled))
+	if (setSetupDiAdminStatus(interfaceIndex, enabled) && adapterAdminMatches(interfaceIndex, enabled, 1500))
 	{
-		log(QStringLiteral("SetupDi %1 enabled %2").arg(interfaceIndex).arg(enabled));
+		log(QStringLiteral("SetupDi verified %1 enabled %2").arg(interfaceIndex).arg(enabled));
 		return true;
 	}
 
-	const auto adapter = adapterByIndex(interfaceIndex);
-	if (setNetshAdminStatus(adapter.alias, enabled))
+	if (setNetshAdminStatus(before.alias, enabled) && adapterAdminMatches(interfaceIndex, enabled, 2000))
 	{
+		log(QStringLiteral("netsh verified %1 enabled %2").arg(interfaceIndex).arg(enabled));
 		return true;
 	}
 
@@ -638,6 +700,18 @@ void WindowsWolAdapterControl::log(const QString& message)
 
 	const QString directory = QString::fromWCharArray(programData) + QStringLiteral("/Veyon");
 	QDir().mkpath(directory);
+
+	PSECURITY_DESCRIPTOR securityDescriptor = nullptr;
+	if (ConvertStringSecurityDescriptorToSecurityDescriptorW(
+			L"D:(A;;GA;;;SY)(A;;GA;;;BA)(A;;GRGW;;;AU)",
+			SDDL_REVISION_1, &securityDescriptor, nullptr))
+	{
+		const QString nativeDirectory = QDir::toNativeSeparators(directory);
+		SetFileSecurityW(reinterpret_cast<LPCWSTR>(nativeDirectory.utf16()),
+						 DACL_SECURITY_INFORMATION, securityDescriptor);
+		LocalFree(securityDescriptor);
+	}
+
 	QFile file(directory + QStringLiteral("/wol-adapter.log"));
 	if (file.open(QIODevice::WriteOnly | QIODevice::Append | QIODevice::Text))
 	{
@@ -645,4 +719,9 @@ void WindowsWolAdapterControl::log(const QString& message)
 						  message + QLatin1Char('\n');
 		file.write(line.toUtf8());
 	}
+}
+
+void WindowsWolAdapterControl::dumpAdapters(const QString& reason)
+{
+	logAdapters(reason);
 }
