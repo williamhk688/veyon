@@ -1,9 +1,10 @@
 !define APP_NAME "Veyon"
+!define DISPLAY_NAME "CYC Veyon"
 !define COMP_NAME "Veyon Solutions"
 !define WEB_SITE "https://veyon.io"
 !define VERSION "@VERSION_MAJOR@.@VERSION_MINOR@.@VERSION_PATCH@.@VERSION_BUILD@"
 !define COPYRIGHT "2004-2026 Veyon Solutions / Tobias Junghans"
-!define DESCRIPTION "Veyon Installer"
+!define DESCRIPTION "CYC Veyon Installer"
 !define LICENSE_TXT "COPYING"
 !define INSTALLER_NAME "veyon-${VERSION}-@VEYON_WINDOWS_ARCH@-setup.exe"
 !define MAIN_APP_EXE "veyon-master.exe"
@@ -15,7 +16,7 @@
 ######################################################################
 
 VIProductVersion  "${VERSION}"
-VIAddVersionKey "ProductName"  "${APP_NAME}"
+VIAddVersionKey "ProductName"  "${DISPLAY_NAME}"
 VIAddVersionKey "CompanyName"  "${COMP_NAME}"
 VIAddVersionKey "LegalCopyright"  "${COPYRIGHT}"
 VIAddVersionKey "FileDescription"  "${DESCRIPTION}"
@@ -25,10 +26,10 @@ VIAddVersionKey "FileVersion"  "${VERSION}"
 ######################################################################
 
 SetCompressor /SOLID lzma
-Name "${APP_NAME}"
-Caption "${APP_NAME} ${VERSION}"
+Name "${DISPLAY_NAME}"
+Caption "${DISPLAY_NAME} ${VERSION}"
 OutFile "${INSTALLER_NAME}"
-BrandingText "${APP_NAME} ${VERSION}"
+BrandingText "${DISPLAY_NAME} ${VERSION}"
 XPStyle on
 InstallDirRegKey "${REG_ROOT}" "${REG_APP_PATH}" ""
 InstallDir "$PROGRAMFILES64\Veyon"
@@ -68,7 +69,7 @@ RequestExecutionLevel admin
 !insertmacro MUI_PAGE_INSTFILES
 
 !define MUI_FINISHPAGE_RUN
-!define MUI_FINISHPAGE_RUN_TEXT "Run Veyon Configurator now"
+!define MUI_FINISHPAGE_RUN_TEXT "Run CYC Veyon Configurator now"
 !define MUI_FINISHPAGE_RUN_FUNCTION "RunConfigurator"
 !define MUI_FINISHPAGE_LINK "Support Veyon project with a donation"
 !define MUI_FINISHPAGE_LINK_LOCATION "https://www.paypal.com/cgi-bin/webscr?item_name=Donation+to+Veyon+-+OpenSource+classroom+management&cmd=_donations&business=donate%40veyon.io"
@@ -207,7 +208,7 @@ ${EndIf}
 ExecWait '"$INSTDIR\veyon-wcli.exe" service start'
 SectionEnd
 
-Section "Veyon Master" SEC_MASTER
+Section "CYC Veyon Master" SEC_MASTER
 ${INSTALL_TYPE}
 SetOutPath "$INSTDIR"
 File "veyon-master.exe"
@@ -215,10 +216,10 @@ File "veyon-master.exe"
 ${GetParameters} $R0
 ${GetOptions} $R0 "/NoStartMenuFolder" $R1
 ${If} ${Errors}
-CreateDirectory "$SMPROGRAMS\Veyon"
-CreateShortCut "$SMPROGRAMS\Veyon\Veyon Master.lnk" "$INSTDIR\${MAIN_APP_EXE}"
+CreateDirectory "$SMPROGRAMS\${DISPLAY_NAME}"
+CreateShortCut "$SMPROGRAMS\${DISPLAY_NAME}\${DISPLAY_NAME} Master.lnk" "$INSTDIR\${MAIN_APP_EXE}"
 ${EndIf}
-CreateShortCut "$DESKTOP\Veyon Master.lnk" "$INSTDIR\${MAIN_APP_EXE}"
+CreateShortCut "$DESKTOP\${DISPLAY_NAME} Master.lnk" "$INSTDIR\${MAIN_APP_EXE}"
 SectionEnd
 
 Section "Interception driver" SEC_INTERCEPTION
@@ -267,15 +268,15 @@ WriteUninstaller "$INSTDIR\uninstall.exe"
 ${GetParameters} $R0
 ${GetOptions} $R0 "/NoStartMenuFolder" $R1
 ${If} ${Errors}
-CreateDirectory "$SMPROGRAMS\Veyon"
-CreateShortCut "$SMPROGRAMS\Veyon\Veyon Configurator.lnk" "$INSTDIR\veyon-configurator.exe"
-CreateShortCut "$SMPROGRAMS\Veyon\Uninstall Veyon.lnk" "$INSTDIR\uninstall.exe"
+CreateDirectory "$SMPROGRAMS\${DISPLAY_NAME}"
+CreateShortCut "$SMPROGRAMS\${DISPLAY_NAME}\${DISPLAY_NAME} Configurator.lnk" "$INSTDIR\veyon-configurator.exe"
+CreateShortCut "$SMPROGRAMS\${DISPLAY_NAME}\Uninstall ${DISPLAY_NAME}.lnk" "$INSTDIR\uninstall.exe"
 WriteIniStr "$INSTDIR\Veyon website.url" "InternetShortcut" "URL" "${WEB_SITE}"
-CreateShortCut "$SMPROGRAMS\Veyon\Veyon Website.lnk" "$INSTDIR\Veyon website.url"
+CreateShortCut "$SMPROGRAMS\${DISPLAY_NAME}\${DISPLAY_NAME} Website.lnk" "$INSTDIR\Veyon website.url"
 ${EndIf}
 
 WriteRegStr ${REG_ROOT} "${REG_APP_PATH}" "" "$INSTDIR\${MAIN_APP_EXE}"
-WriteRegStr ${REG_ROOT} "${UNINSTALL_PATH}"  "DisplayName" "Veyon"
+WriteRegStr ${REG_ROOT} "${UNINSTALL_PATH}"  "DisplayName" "${DISPLAY_NAME}"
 WriteRegStr ${REG_ROOT} "${UNINSTALL_PATH}"  "UninstallString" "$INSTDIR\uninstall.exe"
 WriteRegStr ${REG_ROOT} "${UNINSTALL_PATH}"  "DisplayIcon" "$INSTDIR\${MAIN_APP_EXE}"
 WriteRegStr ${REG_ROOT} "${UNINSTALL_PATH}"  "DisplayVersion" "${VERSION}"
@@ -321,8 +322,14 @@ Delete "$SMPROGRAMS\Veyon\Veyon Configurator.lnk"
 Delete "$SMPROGRAMS\Veyon\Uninstall Veyon.lnk"
 Delete "$SMPROGRAMS\Veyon\Veyon Website.lnk"
 RmDir "$SMPROGRAMS\Veyon"
+Delete "$SMPROGRAMS\${DISPLAY_NAME}\${DISPLAY_NAME} Master.lnk"
+Delete "$SMPROGRAMS\${DISPLAY_NAME}\${DISPLAY_NAME} Configurator.lnk"
+Delete "$SMPROGRAMS\${DISPLAY_NAME}\Uninstall ${DISPLAY_NAME}.lnk"
+Delete "$SMPROGRAMS\${DISPLAY_NAME}\${DISPLAY_NAME} Website.lnk"
+RmDir "$SMPROGRAMS\${DISPLAY_NAME}"
 
 Delete "$DESKTOP\Veyon Master.lnk"
+Delete "$DESKTOP\${DISPLAY_NAME} Master.lnk"
 
 DeleteRegKey ${REG_ROOT} "${REG_APP_PATH}"
 DeleteRegKey ${REG_ROOT} "${UNINSTALL_PATH}"
@@ -338,8 +345,8 @@ FunctionEnd
 
 LangString DESC_SEC_SERVICE ${LANG_ENGLISH} "Veyon service and common files required on all computers"
 LangString DESC_SEC_SERVICE ${LANG_GERMAN} "Veyon-Dienst und gemeinsame Dateien, die auf allen Computern benötigt werden"
-LangString DESC_SEC_MASTER ${LANG_ENGLISH} "Master application for monitoring and controlling Veyon client computers"
-LangString DESC_SEC_MASTER ${LANG_GERMAN} "Master-Applikation zum Beobachten und Steuern von Veyon-Client-Computern"
+LangString DESC_SEC_MASTER ${LANG_ENGLISH} "Master application for monitoring and controlling CYC Veyon client computers"
+LangString DESC_SEC_MASTER ${LANG_GERMAN} "Master-Applikation zum Beobachten und Steuern von CYC Veyon-Client-Computern"
 LangString DESC_SEC_INTERCEPTION ${LANG_ENGLISH} "Special input device driver required for intercepting keyboard shortcuts such as Ctrl+Alt+Del in screen lock mode"
 LangString DESC_SEC_INTERCEPTION ${LANG_GERMAN} "Spezieller Eingabegerätetreiber, der zum Abfangen von Tastenkombinationen wie Strg+Alt+Entf im Bildschirmsperr-Modus benötigt wird"
 

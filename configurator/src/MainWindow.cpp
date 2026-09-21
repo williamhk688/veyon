@@ -58,7 +58,7 @@ MainWindow::MainWindow( QWidget* parent ) :
 {
 	ui->setupUi( this );
 
-	setWindowTitle(tr("Veyon Configurator %1").arg(VeyonCore::versionString()));
+	setWindowTitle(tr("CYC Veyon Configurator %1").arg(VeyonCore::versionString()));
 
 	ui->pageSelector->setMinimumWidth(196);
 	ui->pageSelector->setSpacing(6);
@@ -149,7 +149,7 @@ void MainWindow::apply()
 	const auto showError = [this](const ConfigurationManager& configurationManager) {
 		vCritical() << configurationManager.errorString().toUtf8().constData();
 
-		QMessageBox::critical(this, tr("Veyon Configurator"), configurationManager.errorString());
+		QMessageBox::critical(this, tr("CYC Veyon Configurator"), configurationManager.errorString());
 	};
 
 	ConfigurationManager configurationManager;

@@ -5,8 +5,8 @@
 <policyconfig>
 
   <action id="io.veyon.pkexec.veyon-configurator">
-    <description>Veyon Configurator</description>
-    <message>Authentication is required to run the Veyon Configurator</message>
+    <description>CYC Veyon Configurator</description>
+    <message>Authentication is required to run CYC Veyon Configurator</message>
     <message xml:lang="de">Für die Ausführung des Veyon Configurators ist eine Authentifizierung erforderlich</message>
     <icon_name>veyon-configurator</icon_name>
     <defaults>

@@ -256,7 +256,7 @@ QString TeacherSelfRescue::handbookHtml(int step)
 			"<h3>步驟 1 — 先做簡單排查</h3>"
 			"<p>學生電腦變磚時，多數情況仍可用老師電腦解開，不必進安全模式。</p>"
 			"<ol>"
-			"<li><b>用 Veyon Master 解鎖：</b>選取該學生電腦，按 Unlock（解鎖）。"
+			"<li><b>用 CYC Veyon 解鎖：</b>選取該學生電腦，按 Unlock（解鎖）。"
 			"若正在演示，先按 Stop Demo（停止演示）。這是正規做法。</li>"
 			"<li><b>網絡斷了？</b>拔網線<b>不能</b>自行解鎖。鎖定旗標記在學生本機。"
 			"請把網線插回（或接上 Wi-Fi），等 Master 再連上後，再按一次 Unlock / Stop Demo。</li>"
