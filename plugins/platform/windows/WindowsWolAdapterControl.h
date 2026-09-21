@@ -22,4 +22,5 @@ public:
 
 	static bool setAdminStatus(unsigned long interfaceIndex, bool enabled);
 	static bool setAdminStatusNative(unsigned long interfaceIndex, bool enabled);
+	static bool canTemporarilyEnableAdapter(unsigned long interfaceIndex);
 };
