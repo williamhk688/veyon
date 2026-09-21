@@ -1,8 +1,8 @@
 CYC Veyon 4.11.2 (based on Veyon) — Windows 64-bit installer
 ============================================================
 
-Test package: WOL Ethernet enable fix (retry)
-  Source: 4f6e529f (includes PR #4 + enable/helper fixes)
+Test package: WOL Ethernet enable, verify SetIfEntry actually worked
+  Source: 5586726b
   Branch: cursor/wol-nic-enable-fix-ecca
 
 Direct download:
@@ -10,23 +10,18 @@ Direct download:
   https://github.com/williamhk688/veyon/raw/cursor/wol-nic-enable-fix-ecca/installer/veyon_4_11_2_win64_modified_setup.exe
 
 SHA-256:
-  c61c5734131f4ff24977d9fcd89405d9ef052b3d5917cd116f0f6f6f2df59e30
+  0c1efdf0ba52f98dcc3f4173837e1123f34c57673fe27575847e9e2ddc6b686b
 
-This installer stops running Veyon processes before replacing
-windows-platform.dll, then restarts VeyonService.
+The previous log showed the helper ran and SetIfEntry claimed success on
+interface 20, then restored it 5 seconds later. Windows can report
+SetIfEntry success without changing the adapter. This build checks the
+real admin status and falls back to netsh if the NIC stays disabled.
 
-NIC flash test
---------------
-1. Close Master if it is open. Run this setup as administrator.
-2. After install, open Master from:
-     C:\Program Files\Veyon\veyon-master.exe
-3. Leave Intel Ethernet Disabled. Keep the adapter window visible.
-4. Select a computer and click Power on.
-5. Intel Ethernet should become Enabled for up to about 5 seconds,
-   then return to Disabled.
+Close Master, install as administrator, then open:
 
-If it still does not flash, send this file:
+  C:\Program Files\Veyon\veyon-master.exe
+
+Watch Intel Ethernet, click Power on. If it still does not flash, send
+the new:
 
   C:\ProgramData\Veyon\wol-adapter.log
-
-Without a school Ethernet cable, the other PC will not wake.
