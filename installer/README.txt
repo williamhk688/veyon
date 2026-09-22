@@ -1,8 +1,8 @@
 CYC Veyon 4.11.2 (based on Veyon) — Windows 64-bit installer
 ============================================================
 
-WOL edition (white lock overlay with centered crest; Ethernet wait 15s)
-  Source: 0ef87930
+WOL edition (no wol-adapter.log; white lock overlay; Ethernet wait 15s)
+  Source: 541861d5
   Branch: cursor/wol-nic-enable-fix-ecca
 
 Direct download:
@@ -10,12 +10,15 @@ Direct download:
   https://github.com/williamhk688/veyon/raw/cursor/wol-nic-enable-fix-ecca/installer/veyon_4_11_2_win64_modified_setup.exe
 
 SHA-256:
-  bcb4cd0d67f9ed4feac9096d9b5b240488d07eacd930747587b7b6af27c2e018
+  ade3d580f791f89816bcb4f089779d1b5f1b9dfce5e7a9dcea56ad9f43d5e920
 
+Power On does not write C:\ProgramData\Veyon\wol-adapter.log.
+You can delete that file if it is still on the teacher PC.
 Lock screen: white background, school crest centered.
 Power On waits up to 15 seconds for school DHCP.
 
-PR #2 is not modified. Close Master, install as administrator, then open:
+PR #2 is not modified. Close Master, install as administrator, then restart
+Veyon Service and open:
 
   C:\Program Files\Veyon\veyon-master.exe
 
