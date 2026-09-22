@@ -1,8 +1,8 @@
 CYC Veyon 4.11.2 (based on Veyon) — Windows 64-bit installer
 ============================================================
 
-WOL edition (lock overlay uses school crest; Ethernet wait 15s)
-  Source: 0f9450af
+WOL edition (white lock overlay with centered crest; Ethernet wait 15s)
+  Source: 0ef87930
   Branch: cursor/wol-nic-enable-fix-ecca
 
 Direct download:
@@ -10,15 +10,13 @@ Direct download:
   https://github.com/williamhk688/veyon/raw/cursor/wol-nic-enable-fix-ecca/installer/veyon_4_11_2_win64_modified_setup.exe
 
 SHA-256:
-  192f7b78c46f94ffe193335145d88d6080d7301374fc3367542f3f4b317f7609
+  bcb4cd0d67f9ed4feac9096d9b5b240488d07eacd930747587b7b6af27c2e018
 
-Changes vs the previous WOL flash-ok package:
-  - Lock screen shows the Chuen Yuen College crest instead of the padlock
-  - Power On waits up to 15 seconds for school DHCP (10.81.x.x)
+Lock screen: white background, school crest centered.
+Power On waits up to 15 seconds for school DHCP.
 
-Lock, failsafe, and input blocking are unchanged.
-PR #2 is not modified.
-
-Close Master, install as administrator, then open:
+PR #2 is not modified. Close Master, install as administrator, then open:
 
   C:\Program Files\Veyon\veyon-master.exe
+
+Student PCs need this build to see the white lock overlay.
