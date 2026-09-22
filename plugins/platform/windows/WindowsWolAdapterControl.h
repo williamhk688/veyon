@@ -14,7 +14,7 @@
 class WindowsWolAdapterControl
 {
 public:
-	static constexpr int LinkReadyTimeoutMs = 8000;
+	static constexpr int LinkReadyTimeoutMs = 15000;
 	static constexpr int LinkPollIntervalMs = 50;
 
 	static std::unique_ptr<PlatformNetworkFunctions::WakeOnLanSession>
