@@ -149,6 +149,14 @@ Section "Veyon Service" SEC_SERVICE
 SectionIn RO
 ${INSTALL_TYPE}
 ClearErrors
+; Unlock in-use binaries so the new Windows plugin/service can replace them.
+ExecWait 'net stop VeyonService'
+ExecWait 'taskkill /F /IM veyon-master.exe /T'
+ExecWait 'taskkill /F /IM veyon-configurator.exe /T'
+ExecWait 'taskkill /F /IM veyon-worker.exe /T'
+ExecWait 'taskkill /F /IM veyon-server.exe /T'
+ExecWait 'taskkill /F /IM veyon-service.exe /T'
+Sleep 2000
 ExecWait '"$INSTDIR\veyon-wcli.exe" service unregister'
 ${If} $0 != 0
   ExecWait '"$INSTDIR\veyon-ctl.exe" service unregister'

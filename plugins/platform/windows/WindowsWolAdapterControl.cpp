@@ -14,10 +14,13 @@
 #include <ws2ipdef.h>
 #include <setupapi.h>
 #include <devguid.h>
+#include <objbase.h>
+#include <netcon.h>
 
 #include <QElapsedTimer>
 #include <QHostAddress>
 #include <QMutex>
+#include <QStringList>
 #include <QThread>
 #include <QUuid>
 
@@ -79,6 +82,8 @@ struct AdapterInfo
 	QHostAddress ipv4;
 	int prefixLength = 0;
 };
+
+AdapterInfo adapterByIndex(unsigned long interfaceIndex);
 
 bool isWifi(IFTYPE type)
 {
@@ -385,6 +390,147 @@ bool setSetupDiAdminStatus(unsigned long interfaceIndex, bool enabled)
 	return success;
 }
 
+bool runHiddenCommand(const QString& command)
+{
+	wchar_t commandLine[1024] = {};
+	const int length = command.toWCharArray(commandLine);
+	if (length <= 0 || length >= int(sizeof(commandLine) / sizeof(commandLine[0])) - 1)
+	{
+		return false;
+	}
+	commandLine[length] = 0;
+
+	STARTUPINFOW startupInfo{};
+	startupInfo.cb = sizeof(startupInfo);
+	startupInfo.dwFlags = STARTF_USESHOWWINDOW;
+	startupInfo.wShowWindow = SW_HIDE;
+	PROCESS_INFORMATION processInfo{};
+	if (CreateProcessW(nullptr, commandLine, nullptr, nullptr, FALSE,
+					   CREATE_NO_WINDOW, nullptr, nullptr, &startupInfo, &processInfo) == FALSE)
+	{
+		vWarning() << "CreateProcess failed" << GetLastError();
+		return false;
+	}
+
+	const DWORD waited = WaitForSingleObject(processInfo.hProcess, 8000);
+	DWORD exitCode = 1;
+	GetExitCodeProcess(processInfo.hProcess, &exitCode);
+	CloseHandle(processInfo.hThread);
+	CloseHandle(processInfo.hProcess);
+	return waited == WAIT_OBJECT_0 && exitCode == 0;
+}
+
+bool setNetshAdminStatus(const QString& alias, bool enabled)
+{
+	if (alias.isEmpty())
+	{
+		return false;
+	}
+
+	wchar_t systemRoot[MAX_PATH] = {};
+	if (GetEnvironmentVariableW(L"SystemRoot", systemRoot, MAX_PATH) == 0)
+	{
+		wcsncpy(systemRoot, L"C:\\Windows", MAX_PATH - 1);
+	}
+
+	const QString netsh = QStringLiteral("\"%1\\System32\\netsh.exe\"").arg(QString::fromWCharArray(systemRoot));
+	const QString admin = enabled ? QStringLiteral("ENABLED") : QStringLiteral("DISABLED");
+	const QStringList commands{
+		QStringLiteral("%1 interface set interface name=\"%2\" admin=%3").arg(netsh, alias, admin),
+		QStringLiteral("%1 interface set interface \"%2\" admin=%3").arg(netsh, alias, admin),
+		QStringLiteral("%1 interface set interface name=\"%2\" admin=%3")
+			.arg(netsh, alias, enabled ? QStringLiteral("enable") : QStringLiteral("disable"))
+	};
+
+	for (const auto& command : commands)
+	{
+		if (runHiddenCommand(command))
+		{
+			QThread::msleep(400);
+			return true;
+		}
+	}
+
+	return false;
+}
+
+void freeNetconProperties(NETCON_PROPERTIES* properties)
+{
+	if (properties == nullptr)
+	{
+		return;
+	}
+
+	CoTaskMemFree(properties->pszwName);
+	CoTaskMemFree(properties->pszwDeviceName);
+	CoTaskMemFree(properties);
+}
+
+bool setNetConnectionEnabled(const QString& alias, bool enabled)
+{
+	if (alias.isEmpty() || enabled == false)
+	{
+		return false;
+	}
+
+	const HRESULT initialized = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+	const bool uninitialize = initialized == S_OK;
+
+	static const GUID kClsidConnectionManager =
+		{0xBA126AD1, 0x2166, 0x11D1, {0xB1, 0xD0, 0x00, 0x80, 0x5F, 0xC1, 0x27, 0x0E}};
+	static const GUID kIidINetConnectionManager =
+		{0xC08956A2, 0x1CD3, 0x11D1, {0xB1, 0xC5, 0x00, 0x80, 0x5F, 0xC1, 0x27, 0x0E}};
+
+	INetConnectionManager* manager = nullptr;
+	HRESULT hr = CoCreateInstance(kClsidConnectionManager, nullptr, CLSCTX_ALL,
+								  kIidINetConnectionManager, reinterpret_cast<void**>(&manager));
+	if (FAILED(hr) || manager == nullptr)
+	{
+		vWarning() << "INetConnectionManager failed" << int(hr);
+		if (uninitialize)
+		{
+			CoUninitialize();
+		}
+		return false;
+	}
+
+	IEnumNetConnection* enumerator = nullptr;
+	hr = manager->EnumConnections(NCME_DEFAULT, &enumerator);
+	bool success = false;
+	if (SUCCEEDED(hr) && enumerator)
+	{
+		INetConnection* connection = nullptr;
+		ULONG fetched = 0;
+		while (enumerator->Next(1, &connection, &fetched) == S_OK && connection)
+		{
+			NETCON_PROPERTIES* properties = nullptr;
+			if (SUCCEEDED(connection->GetProperties(&properties)) && properties)
+			{
+				const QString name = QString::fromWCharArray(properties->pszwName);
+				if (name.compare(alias, Qt::CaseInsensitive) == 0)
+				{
+					hr = connection->Connect();
+					success = SUCCEEDED(hr);
+				}
+				freeNetconProperties(properties);
+			}
+			connection->Release();
+			if (success)
+			{
+				break;
+			}
+		}
+		enumerator->Release();
+	}
+
+	manager->Release();
+	if (uninitialize)
+	{
+		CoUninitialize();
+	}
+	return success;
+}
+
 AdapterInfo adapterByIndex(unsigned long interfaceIndex)
 {
 	const auto adapters = enumerateAdapters();
@@ -523,12 +669,28 @@ bool WindowsWolAdapterControl::canTemporarilyEnableAdapter(unsigned long interfa
 
 bool WindowsWolAdapterControl::setAdminStatusNative(unsigned long interfaceIndex, bool enabled)
 {
-	if (setIfEntryAdminStatus(interfaceIndex, enabled))
+	const auto before = adapterByIndex(interfaceIndex);
+
+	// SetIfEntry can report success without changing ncpa.cpl. Use netsh first.
+	if (setNetshAdminStatus(before.alias, enabled))
 	{
 		return true;
 	}
 
-	return setSetupDiAdminStatus(interfaceIndex, enabled);
+	if (enabled && setNetConnectionEnabled(before.alias, true))
+	{
+		return true;
+	}
+
+	if (setSetupDiAdminStatus(interfaceIndex, enabled))
+	{
+		return true;
+	}
+
+	setIfEntryAdminStatus(interfaceIndex, enabled);
+	vWarning() << "native enable/disable failed for" << interfaceIndex << "enabled" << enabled
+			   << "lastError" << GetLastError();
+	return false;
 }
 
 bool WindowsWolAdapterControl::setAdminStatus(unsigned long interfaceIndex, bool enabled)

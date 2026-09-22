@@ -70,7 +70,7 @@ target_include_directories(windows-platform PRIVATE
 	${ultravnc_DIR}
 	)
 
-target_link_libraries(windows-platform PRIVATE -lws2_32 -lwtsapi32 -lnetapi32 -luserenv -limm32 -lntdll -linterception -liphlpapi -lsetupapi -lsecur32 -ladvapi32 -lole32)
+target_link_libraries(windows-platform PRIVATE -lws2_32 -lwtsapi32 -lnetapi32 -luserenv -limm32 -lntdll -linterception -liphlpapi -lsetupapi -lsecur32 -ladvapi32 -lole32 -loleaut32)
 if(MINGW_PREFIX)
 	target_link_directories(windows-platform PRIVATE ${MINGW_PREFIX}/lib)
 endif()

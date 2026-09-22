@@ -302,6 +302,8 @@ void WindowsServiceCore::serviceMain()
 		return;
 	}
 
+	m_wolAdapterIpc.start();
+
 	SasEventListener sasEventListener;
 	sasEventListener.start();
 

@@ -11,8 +11,6 @@
 
 #include <QThread>
 
-class QLocalServer;
-
 class WindowsWolAdapterIpcServer : public QThread
 {
 	Q_OBJECT
@@ -26,9 +24,7 @@ protected:
 	void run() override;
 
 private:
-	void acceptConnection();
-
-	QLocalServer* m_server{nullptr};
+	void* m_stopEvent{nullptr};
 };
 
 class WindowsWolAdapterIpcClient
