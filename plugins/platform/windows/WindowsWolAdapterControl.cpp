@@ -14,14 +14,10 @@
 #include <ws2ipdef.h>
 #include <setupapi.h>
 #include <devguid.h>
-#include <sddl.h>
 #include <objbase.h>
 #include <netcon.h>
 
-#include <QDateTime>
-#include <QDir>
 #include <QElapsedTimer>
-#include <QFile>
 #include <QHostAddress>
 #include <QMutex>
 #include <QStringList>
@@ -323,31 +319,6 @@ bool setIfEntryAdminStatus(unsigned long interfaceIndex, bool enabled)
 	return true;
 }
 
-void logAdapters(const QString& reason)
-{
-	WindowsWolAdapterControl::log(reason);
-	const auto adapters = enumerateAdapters();
-	if (adapters.isEmpty())
-	{
-		WindowsWolAdapterControl::log(QStringLiteral("adapter list empty"));
-		return;
-	}
-
-	for (const auto& adapter : adapters)
-	{
-		WindowsWolAdapterControl::log(
-			QStringLiteral("adapter %1 type %2 hw %3 virtual %4 admin %5 oper %6 %7 | %8")
-				.arg(adapter.index)
-				.arg(adapter.type)
-				.arg(adapter.hardware)
-				.arg(looksVirtual(adapter))
-				.arg(adapter.adminStatus)
-				.arg(adapter.operStatus)
-				.arg(adapter.alias)
-				.arg(adapter.description));
-	}
-}
-
 bool setSetupDiAdminStatus(unsigned long interfaceIndex, bool enabled)
 {
 	NET_LUID luid{};
@@ -437,7 +408,7 @@ bool runHiddenCommand(const QString& command)
 	if (CreateProcessW(nullptr, commandLine, nullptr, nullptr, FALSE,
 					   CREATE_NO_WINDOW, nullptr, nullptr, &startupInfo, &processInfo) == FALSE)
 	{
-		WindowsWolAdapterControl::log(QStringLiteral("CreateProcess failed %1 for %2").arg(GetLastError()).arg(command));
+		vWarning() << "CreateProcess failed" << GetLastError();
 		return false;
 	}
 
@@ -446,7 +417,6 @@ bool runHiddenCommand(const QString& command)
 	GetExitCodeProcess(processInfo.hProcess, &exitCode);
 	CloseHandle(processInfo.hThread);
 	CloseHandle(processInfo.hProcess);
-	WindowsWolAdapterControl::log(QStringLiteral("command exit %1 wait %2: %3").arg(exitCode).arg(waited).arg(command));
 	return waited == WAIT_OBJECT_0 && exitCode == 0;
 }
 
@@ -516,7 +486,7 @@ bool setNetConnectionEnabled(const QString& alias, bool enabled)
 								  kIidINetConnectionManager, reinterpret_cast<void**>(&manager));
 	if (FAILED(hr) || manager == nullptr)
 	{
-		WindowsWolAdapterControl::log(QStringLiteral("INetConnectionManager failed %1").arg(int(hr)));
+		vWarning() << "INetConnectionManager failed" << int(hr);
 		if (uninitialize)
 		{
 			CoUninitialize();
@@ -537,14 +507,9 @@ bool setNetConnectionEnabled(const QString& alias, bool enabled)
 			if (SUCCEEDED(connection->GetProperties(&properties)) && properties)
 			{
 				const QString name = QString::fromWCharArray(properties->pszwName);
-				const QString device = QString::fromWCharArray(properties->pszwDeviceName);
-				WindowsWolAdapterControl::log(QStringLiteral("netcon %1 | %2 status %3")
-											  .arg(name, device)
-											  .arg(int(properties->Status)));
 				if (name.compare(alias, Qt::CaseInsensitive) == 0)
 				{
 					hr = connection->Connect();
-					WindowsWolAdapterControl::log(QStringLiteral("INetConnection::Connect %1 hr %2").arg(alias).arg(int(hr)));
 					success = SUCCEEDED(hr);
 				}
 				freeNetconProperties(properties);
@@ -604,11 +569,9 @@ private:
 	void prepare(const QList<QHostAddress>& targetHosts)
 	{
 		auto adapter = chooseEthernetAdapter(enumerateAdapters(), targetHosts);
-		logAdapters(QStringLiteral("Power On adapter scan"));
 		if (adapter.index == 0)
 		{
 			vWarning() << "no Ethernet adapter found for Wake-on-LAN";
-			WindowsWolAdapterControl::log(QStringLiteral("no Ethernet adapter found"));
 			return;
 		}
 
@@ -619,23 +582,14 @@ private:
 				 << "admin" << adapter.adminStatus << "oper" << adapter.operStatus
 				 << adapter.ipv4.toString();
 
-		WindowsWolAdapterControl::log(QStringLiteral("using interface %1 %2 admin %3 oper %4 ipv4 %5")
-									  .arg(adapter.index)
-									  .arg(adapter.alias)
-									  .arg(adapter.adminStatus)
-									  .arg(adapter.operStatus)
-									  .arg(adapter.ipv4.toString()));
-
 		if (adapter.adminStatus != NET_IF_ADMIN_STATUS_UP)
 		{
 			if (WindowsWolAdapterControl::setAdminStatus(adapter.index, true) == false)
 			{
 				vWarning() << "failed to enable WOL interface" << adapter.index;
-				WindowsWolAdapterControl::log(QStringLiteral("failed to enable interface %1").arg(adapter.index));
 				return;
 			}
 			m_changed = true;
-			WindowsWolAdapterControl::log(QStringLiteral("enabled interface %1").arg(adapter.index));
 		}
 
 		QElapsedTimer timer;
@@ -662,11 +616,6 @@ private:
 			vWarning() << "WOL interface" << m_index << "did not become ready in time"
 					   << "admin" << ready.adminStatus << "oper" << ready.operStatus
 					   << "IPv4" << ready.ipv4.toString() << "prefix" << ready.prefixLength;
-			WindowsWolAdapterControl::log(QStringLiteral("interface %1 not ready admin %2 oper %3 ipv4 %4")
-										  .arg(m_index)
-										  .arg(ready.adminStatus)
-										  .arg(ready.operStatus)
-										  .arg(ready.ipv4.toString()));
 			return;
 		}
 
@@ -690,12 +639,10 @@ private:
 		if (WindowsWolAdapterControl::setAdminStatus(m_index, enable) == false)
 		{
 			vWarning() << "failed to restore WOL interface" << m_index << "enabled" << enable;
-			WindowsWolAdapterControl::log(QStringLiteral("failed to restore interface %1 enabled %2").arg(m_index).arg(enable));
 		}
 		else
 		{
 			vDebug() << "restored WOL interface" << m_index << "enabled" << enable;
-			WindowsWolAdapterControl::log(QStringLiteral("restored interface %1 enabled %2").arg(m_index).arg(enable));
 		}
 		m_changed = false;
 	}
@@ -723,38 +670,26 @@ bool WindowsWolAdapterControl::canTemporarilyEnableAdapter(unsigned long interfa
 bool WindowsWolAdapterControl::setAdminStatusNative(unsigned long interfaceIndex, bool enabled)
 {
 	const auto before = adapterByIndex(interfaceIndex);
-	log(QStringLiteral("native %1 %2 | %3 wantEnabled %4 admin %5 oper %6")
-		.arg(interfaceIndex)
-		.arg(before.alias)
-		.arg(before.description)
-		.arg(enabled)
-		.arg(before.adminStatus)
-		.arg(before.operStatus));
 
 	// SetIfEntry can report success without changing ncpa.cpl. Use netsh first.
 	if (setNetshAdminStatus(before.alias, enabled))
 	{
-		log(QStringLiteral("netsh changed %1 enabled %2").arg(before.alias).arg(enabled));
 		return true;
 	}
 
 	if (enabled && setNetConnectionEnabled(before.alias, true))
 	{
-		log(QStringLiteral("INetConnection enabled %1").arg(before.alias));
 		return true;
 	}
 
 	if (setSetupDiAdminStatus(interfaceIndex, enabled))
 	{
-		log(QStringLiteral("SetupDi changed %1 enabled %2").arg(interfaceIndex).arg(enabled));
 		return true;
 	}
 
 	setIfEntryAdminStatus(interfaceIndex, enabled);
-	log(QStringLiteral("native enable/disable failed for %1 enabled %2 lastError %3")
-		.arg(interfaceIndex)
-		.arg(enabled)
-		.arg(GetLastError()));
+	vWarning() << "native enable/disable failed for" << interfaceIndex << "enabled" << enabled
+			   << "lastError" << GetLastError();
 	return false;
 }
 
@@ -766,40 +701,4 @@ bool WindowsWolAdapterControl::setAdminStatus(unsigned long interfaceIndex, bool
 	}
 
 	return WindowsWolAdapterIpcClient::setAdminStatus(interfaceIndex, enabled);
-}
-
-void WindowsWolAdapterControl::log(const QString& message)
-{
-	wchar_t programData[MAX_PATH] = {};
-	if (GetEnvironmentVariableW(L"ProgramData", programData, MAX_PATH) == 0)
-	{
-		wcsncpy(programData, L"C:\\ProgramData", MAX_PATH - 1);
-	}
-
-	const QString directory = QString::fromWCharArray(programData) + QStringLiteral("/Veyon");
-	QDir().mkpath(directory);
-
-	PSECURITY_DESCRIPTOR securityDescriptor = nullptr;
-	if (ConvertStringSecurityDescriptorToSecurityDescriptorW(
-			L"D:(A;;GA;;;SY)(A;;GA;;;BA)(A;;GRGW;;;AU)",
-			SDDL_REVISION_1, &securityDescriptor, nullptr))
-	{
-		const QString nativeDirectory = QDir::toNativeSeparators(directory);
-		SetFileSecurityW(reinterpret_cast<LPCWSTR>(nativeDirectory.utf16()),
-						 DACL_SECURITY_INFORMATION, securityDescriptor);
-		LocalFree(securityDescriptor);
-	}
-
-	QFile file(directory + QStringLiteral("/wol-adapter.log"));
-	if (file.open(QIODevice::WriteOnly | QIODevice::Append | QIODevice::Text))
-	{
-		const auto line = QDateTime::currentDateTime().toString(QStringLiteral("yyyy-MM-dd HH:mm:ss ")) +
-						  message + QLatin1Char('\n');
-		file.write(line.toUtf8());
-	}
-}
-
-void WindowsWolAdapterControl::dumpAdapters(const QString& reason)
-{
-	logAdapters(reason);
 }

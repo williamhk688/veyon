@@ -201,20 +201,11 @@ void handleConnectedClient(HANDLE pipe, HANDLE stopEvent)
 	quint32 enabled = 0;
 	in >> command >> interfaceIndex >> enabled;
 
-	WindowsWolAdapterControl::dumpAdapters(QStringLiteral("helper request command %1 interface %2 enabled %3")
-				.arg(command)
-				.arg(interfaceIndex)
-				.arg(enabled));
-
 	quint32 result = 0;
 	if (command == 1 &&
 		WindowsWolAdapterControl::canTemporarilyEnableAdapter(interfaceIndex))
 	{
 		result = WindowsWolAdapterControl::setAdminStatusNative(interfaceIndex, enabled != 0) ? 1 : 0;
-		WindowsWolAdapterControl::log(QStringLiteral("helper native %1 interface %2 enabled %3")
-									  .arg(result)
-									  .arg(interfaceIndex)
-									  .arg(enabled));
 	}
 	else if (command == 1)
 	{
@@ -278,12 +269,10 @@ void WindowsWolAdapterIpcServer::run()
 	if (pipe == INVALID_HANDLE_VALUE)
 	{
 		vCritical() << "WOL helper pipe is not available";
-		WindowsWolAdapterControl::log(QStringLiteral("helper pipe create failed"));
 		return;
 	}
 
 	vInfo() << "WOL adapter helper listening";
-	WindowsWolAdapterControl::log(QStringLiteral("helper listening"));
 
 	while (WaitForSingleObject(stopEvent, 0) != WAIT_OBJECT_0)
 	{
@@ -351,7 +340,7 @@ bool WindowsWolAdapterIpcClient::setAdminStatus(unsigned long interfaceIndex, bo
 		}
 		if (error != ERROR_FILE_NOT_FOUND)
 		{
-			WindowsWolAdapterControl::log(QStringLiteral("helper CreateFile failed %1").arg(error));
+			vWarning() << "WOL helper CreateFile failed" << error;
 			return false;
 		}
 		Sleep(50);
@@ -360,7 +349,6 @@ bool WindowsWolAdapterIpcClient::setAdminStatus(unsigned long interfaceIndex, bo
 	if (pipe == INVALID_HANDLE_VALUE)
 	{
 		vWarning() << "WOL adapter helper is not available" << GetLastError();
-		WindowsWolAdapterControl::log(QStringLiteral("helper is not available error %1").arg(GetLastError()));
 		return false;
 	}
 
@@ -376,7 +364,7 @@ bool WindowsWolAdapterIpcClient::setAdminStatus(unsigned long interfaceIndex, bo
 	if (WriteFile(pipe, payload.constData(), DWORD(payload.size()), &written, nullptr) == FALSE ||
 		written != DWORD(payload.size()))
 	{
-		WindowsWolAdapterControl::log(QStringLiteral("helper write failed %1").arg(GetLastError()));
+		vWarning() << "WOL helper write failed" << GetLastError();
 		CloseHandle(pipe);
 		return false;
 	}
@@ -386,7 +374,7 @@ bool WindowsWolAdapterIpcClient::setAdminStatus(unsigned long interfaceIndex, bo
 	if (ReadFile(pipe, response.data(), DWORD(response.size()), &read, nullptr) == FALSE ||
 		read != DWORD(response.size()))
 	{
-		WindowsWolAdapterControl::log(QStringLiteral("helper read failed %1").arg(GetLastError()));
+		vWarning() << "WOL helper read failed" << GetLastError();
 		CloseHandle(pipe);
 		return false;
 	}
@@ -396,9 +384,5 @@ bool WindowsWolAdapterIpcClient::setAdminStatus(unsigned long interfaceIndex, bo
 	in.setVersion(QDataStream::Qt_5_12);
 	quint32 result = 0;
 	in >> result;
-	WindowsWolAdapterControl::log(QStringLiteral("helper result %1 for interface %2 enabled %3")
-								  .arg(result)
-								  .arg(interfaceIndex)
-								  .arg(enabled));
 	return result != 0;
 }
