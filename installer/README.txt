@@ -2,20 +2,26 @@ CYC Veyon 4.11.2 (based on Veyon) — Windows 64-bit installer
 ============================================================
 
 This branch (cursor/classroom-web-filter-ecca) adds classroom web
-filter on top of the WOL edition. The installer binary below is still
-the parent WOL package until a Windows cross-compile of webfilter.dll
-is published here.
+filter on top of the WOL edition. Teacher Master has three mutually
+exclusive buttons: blacklist, whitelist, and restore. Veyon ports
+stay reachable. Common web proxies and DoH hosts are hardcoded-blocked.
+Blacklist can persist until the teacher restores. Whitelist is
+session-only and is dropped on reboot or Veyon Service restart.
 
-WOL edition (no wol-adapter.log; white lock overlay; Ethernet wait 15s)
-  Source: 541861d5
-  Branch: cursor/wol-nic-enable-fix-ecca
+Install this package on both the teacher PC and every student PC,
+then restart Veyon Service. The new Master buttons only work when
+the student Service also has plugins/webfilter.dll.
 
-Direct download (WOL parent, no web-filter plugin yet):
+WOL edition features are unchanged (no wol-adapter.log; white lock
+overlay; Ethernet wait 15s). PR #2 is not modified. The WOL adapter
+files are not changed on this branch.
 
-  https://github.com/williamhk688/veyon/raw/cursor/wol-nic-enable-fix-ecca/installer/veyon_4_11_2_win64_modified_setup.exe
+Direct download:
+
+  https://github.com/williamhk688/veyon/raw/cursor/classroom-web-filter-ecca/installer/veyon_4_11_2_win64_modified_setup.exe
+
+Source: b2769b39
+Branch: cursor/classroom-web-filter-ecca
 
 SHA-256:
-  ade3d580f791f89816bcb4f089779d1b5f1b9dfce5e7a9dcea56ad9f43d5e920
-
-PR #2 is not modified. The WOL adapter files are not changed on this
-branch.
+  a6c03e6a20f11787067d874613268e62ad1c6b8f958788a5e7640054ee01d9e0
