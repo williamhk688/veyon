@@ -1,0 +1,7 @@
+<RCC>
+    <qresource prefix="/webfilter">
+        <file>system-lock-screen.png</file>
+        <file>internet-web-browser.png</file>
+        <file>restore-network.png</file>
+    </qresource>
+</RCC>

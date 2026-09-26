@@ -1,0 +1,125 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>WebFilterConfigurationPage</class>
+ <widget class="QWidget" name="WebFilterConfigurationPage">
+  <property name="windowTitle">
+   <string>網絡管制</string>
+  </property>
+  <property name="windowIcon">
+   <iconset resource="webfilter.qrc">
+    <normaloff>:/webfilter/internet-web-browser.png</normaloff>:/webfilter/internet-web-browser.png</iconset>
+  </property>
+  <layout class="QVBoxLayout" name="verticalLayout">
+   <property name="topMargin">
+    <number>0</number>
+   </property>
+   <property name="bottomMargin">
+    <number>0</number>
+   </property>
+   <item>
+    <widget class="QLabel" name="introLabel">
+     <property name="wordWrap">
+      <bool>true</bool>
+     </property>
+     <property name="text">
+      <string>Master 的「封鎖不良網站」會套用內建代理站加上下列不良網站。「只准課堂網站」只准下列課堂網站，並永遠放行 Veyon。Google 翻譯不會寫死封鎖。內建名單教師不能刪。</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="blockedGroup">
+     <property name="title">
+      <string>不良網站（可改）</string>
+     </property>
+     <layout class="QVBoxLayout" name="blockedLayout">
+      <item>
+       <widget class="QListWidget" name="blockedList"/>
+      </item>
+      <item>
+       <layout class="QHBoxLayout" name="blockedButtons">
+        <item>
+         <widget class="QPushButton" name="addBlockedButton">
+          <property name="text">
+           <string>加入</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="removeBlockedButton">
+          <property name="text">
+           <string>刪除</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <spacer name="blockedSpacer">
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+         </spacer>
+        </item>
+       </layout>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="allowedGroup">
+     <property name="title">
+      <string>課堂網站（可改）</string>
+     </property>
+     <layout class="QVBoxLayout" name="allowedLayout">
+      <item>
+       <widget class="QListWidget" name="allowedList"/>
+      </item>
+      <item>
+       <layout class="QHBoxLayout" name="allowedButtons">
+        <item>
+         <widget class="QPushButton" name="addAllowedButton">
+          <property name="text">
+           <string>加入</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="removeAllowedButton">
+          <property name="text">
+           <string>刪除</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <spacer name="allowedSpacer">
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+         </spacer>
+        </item>
+       </layout>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="hardcodedGroup">
+     <property name="title">
+      <string>內建封鎖（代理站／加密 DNS，不能刪）</string>
+     </property>
+     <layout class="QVBoxLayout" name="hardcodedLayout">
+      <item>
+       <widget class="QListWidget" name="hardcodedList">
+        <property name="editTriggers">
+         <set>QAbstractItemView::NoEditTriggers</set>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources>
+  <include location="webfilter.qrc"/>
+ </resources>
+ <connections/>
+</ui>
