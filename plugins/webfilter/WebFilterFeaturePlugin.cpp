@@ -1,5 +1,5 @@
 /*
- * WebFilterFeaturePlugin.cpp - Master buttons and student-side apply
+ * WebFilterFeaturePlugin.cpp - Master dropdown and student-side apply
  *
  * Copyright (c) 2026 Tobias Junghans <tobydox@veyon.io>
  *
@@ -15,6 +15,7 @@
 #include "WebFilterConfigurationPage.h"
 #include "WebFilterFeaturePlugin.h"
 #include "WebFilterLists.h"
+#include "WebFilterStatusOverlay.h"
 
 #ifdef Q_OS_WIN
 #include "WebFilterEngine.h"
@@ -25,35 +26,52 @@
 WebFilterFeaturePlugin::WebFilterFeaturePlugin(QObject* parent) :
 	QObject(parent),
 	m_configuration(&VeyonCore::config()),
+	m_webFilterFeature(QStringLiteral("WebFilter"),
+					   Feature::Flag::Action | Feature::Flag::AllComponents,
+					   Feature::Uid(QStringLiteral("d4e3f6c5-1b7a-4e4c-af9d-5a8102b4e763")),
+					   Feature::Uid(),
+					   tr("網絡管制 (Web filter)"), {},
+					   tr("Choose blacklist, classroom-only whitelist, or restore web access."),
+					   QStringLiteral(":/webfilter/web-filter.png")),
 	m_blacklistFeature(QStringLiteral("WebFilterBlacklist"),
 					   Feature::Flag::Action | Feature::Flag::AllComponents,
 					   Feature::Uid(QStringLiteral("a1f0c3d2-8e47-4b19-9c6a-2d5e7f81b430")),
-					   Feature::Uid(),
+					   m_webFilterFeature.uid(),
 					   tr("封鎖不良網站 (Block websites)"), {},
-					   tr("Block the built-in proxy list plus the school's bad-website list "
-						  "on the selected computers."),
-					   QStringLiteral(":/webfilter/system-lock-screen.png")),
+					   tr("Block the built-in proxy list, extra school proxies, and the bad-website list."),
+					   QStringLiteral(":/webfilter/web-filter-block.png")),
 	m_whitelistFeature(QStringLiteral("WebFilterWhitelist"),
 					   Feature::Flag::Action | Feature::Flag::AllComponents,
 					   Feature::Uid(QStringLiteral("b2e1d4c3-9f58-4c2a-8d7b-3e6f8092c541")),
-					   Feature::Uid(),
+					   m_webFilterFeature.uid(),
 					   tr("只准課堂網站 (Classroom sites only)"), {},
 					   tr("Allow only the configured classroom websites. Veyon stays allowed. "
 						  "This does not stay active after the student computer restarts."),
-					   QStringLiteral(":/webfilter/internet-web-browser.png")),
+					   QStringLiteral(":/webfilter/web-filter-allow.png")),
 	m_restoreFeature(QStringLiteral("WebFilterRestore"),
 					 Feature::Flag::Action | Feature::Flag::AllComponents,
 					 Feature::Uid(QStringLiteral("c3d2e5b4-0a69-4d3b-9e8c-4f7091a3d652")),
-					 Feature::Uid(),
+					 m_webFilterFeature.uid(),
 					 tr("恢復網絡 (Restore web)"), {},
 					 tr("Remove the classroom web filter from the selected computers."),
-					 QStringLiteral(":/webfilter/restore-network.png")),
-	m_features({ m_blacklistFeature, m_whitelistFeature, m_restoreFeature })
+					 QStringLiteral(":/webfilter/web-filter-restore.png")),
+	m_features({ m_webFilterFeature, m_blacklistFeature, m_whitelistFeature, m_restoreFeature })
 {
 	if (VeyonCore::component() == VeyonCore::Component::Service)
 	{
 		startServiceHelper();
 	}
+	if (VeyonCore::component() == VeyonCore::Component::Server)
+	{
+		startStatusOverlay();
+	}
+}
+
+
+
+WebFilterFeaturePlugin::~WebFilterFeaturePlugin()
+{
+	delete m_statusOverlay;
 }
 
 
@@ -84,7 +102,15 @@ QStringList WebFilterFeaturePlugin::configuredBlockedDomains() const
 
 QStringList WebFilterFeaturePlugin::configuredAllowedDomains() const
 {
-	return WebFilterLists::effectiveAllowlist(WebFilterLists::fromJson(m_configuration.allowedWebsites()));
+	return WebFilterLists::effectiveAllowlist(WebFilterLists::fromJson(m_configuration.allowedWebsites()),
+											  configuredExtraProxyDomains());
+}
+
+
+
+QStringList WebFilterFeaturePlugin::configuredExtraProxyDomains() const
+{
+	return WebFilterLists::fromJson(m_configuration.extraProxyWebsites());
 }
 
 
@@ -105,6 +131,27 @@ void WebFilterFeaturePlugin::startServiceHelper()
 
 
 
+void WebFilterFeaturePlugin::startStatusOverlay()
+{
+	if (m_statusOverlay == nullptr)
+	{
+		m_statusOverlay = new WebFilterStatusOverlay;
+	}
+	refreshStatusOverlay();
+}
+
+
+
+void WebFilterFeaturePlugin::refreshStatusOverlay()
+{
+	if (m_statusOverlay)
+	{
+		m_statusOverlay->syncFromState();
+	}
+}
+
+
+
 bool WebFilterFeaturePlugin::controlFeature(Feature::Uid featureUid, Operation operation,
 											const QVariantMap& arguments,
 											const ComputerControlInterfaceList& computerControlInterfaces)
@@ -114,6 +161,11 @@ bool WebFilterFeaturePlugin::controlFeature(Feature::Uid featureUid, Operation o
 		return false;
 	}
 
+	if (featureUid == m_webFilterFeature.uid())
+	{
+		return true;
+	}
+
 	if (featureUid == m_blacklistFeature.uid())
 	{
 		auto domains = arguments.value(argToString(Argument::Domains)).toStringList();
@@ -121,8 +173,14 @@ bool WebFilterFeaturePlugin::controlFeature(Feature::Uid featureUid, Operation o
 		{
 			domains = configuredBlockedDomains();
 		}
+		auto extra = arguments.value(argToString(Argument::ExtraProxies)).toStringList();
+		if (extra.isEmpty())
+		{
+			extra = configuredExtraProxyDomains();
+		}
 		sendFeatureMessage(FeatureMessage{featureUid, FeatureCommand::ApplyBlacklist}
-						   .addArgument(Argument::Domains, domains),
+						   .addArgument(Argument::Domains, domains)
+						   .addArgument(Argument::ExtraProxies, extra),
 						   computerControlInterfaces);
 		return true;
 	}
@@ -134,8 +192,14 @@ bool WebFilterFeaturePlugin::controlFeature(Feature::Uid featureUid, Operation o
 		{
 			domains = configuredAllowedDomains();
 		}
+		auto extra = arguments.value(argToString(Argument::ExtraProxies)).toStringList();
+		if (extra.isEmpty())
+		{
+			extra = configuredExtraProxyDomains();
+		}
 		sendFeatureMessage(FeatureMessage{featureUid, FeatureCommand::ApplyWhitelist}
-						   .addArgument(Argument::Domains, domains),
+						   .addArgument(Argument::Domains, domains)
+						   .addArgument(Argument::ExtraProxies, extra),
 						   computerControlInterfaces);
 		return true;
 	}
@@ -160,6 +224,11 @@ bool WebFilterFeaturePlugin::startFeature(VeyonMasterInterface& master, const Fe
 		return false;
 	}
 
+	if (feature.uid() == m_webFilterFeature.uid())
+	{
+		return true;
+	}
+
 	if (computerControlInterfaces.isEmpty())
 	{
 		QMessageBox::information(master.mainWindow(),
@@ -172,7 +241,7 @@ bool WebFilterFeaturePlugin::startFeature(VeyonMasterInterface& master, const Fe
 	{
 		if (QMessageBox::question(master.mainWindow(),
 								  tr("封鎖不良網站"),
-								  tr("將封鎖內建代理站，以及 Configurator 裡的不良網站。\n"
+								  tr("將封鎖內建代理站、學校新增的代理站，以及 Configurator 裡的不良網站。\n"
 									 "Veyon 通訊不受影響。是否套用到已選電腦？"))
 			!= QMessageBox::Yes)
 		{
@@ -211,30 +280,35 @@ bool WebFilterFeaturePlugin::handleFeatureMessage(VeyonServerInterface& server,
 
 #ifdef Q_OS_WIN
 	const auto domains = message.argument(Argument::Domains).toStringList();
+	const auto extra = message.argument(Argument::ExtraProxies).toStringList();
 	switch (message.command<FeatureCommand>())
 	{
 	case FeatureCommand::ApplyBlacklist:
-		if (WindowsWebFilterIpcClient::request(WindowsWebFilterIpcClient::Command::Blacklist, domains) == false)
+		if (WindowsWebFilterIpcClient::request(WindowsWebFilterIpcClient::Command::Blacklist, domains, extra) == false)
 		{
 			vWarning() << "failed to apply web blacklist";
 		}
+		refreshStatusOverlay();
 		return true;
 	case FeatureCommand::ApplyWhitelist:
-		if (WindowsWebFilterIpcClient::request(WindowsWebFilterIpcClient::Command::Whitelist, domains) == false)
+		if (WindowsWebFilterIpcClient::request(WindowsWebFilterIpcClient::Command::Whitelist, domains, extra) == false)
 		{
 			vWarning() << "failed to apply web whitelist";
 		}
+		refreshStatusOverlay();
 		return true;
 	case FeatureCommand::Restore:
 		if (WindowsWebFilterIpcClient::request(WindowsWebFilterIpcClient::Command::Restore) == false)
 		{
 			vWarning() << "failed to restore web filter";
 		}
+		refreshStatusOverlay();
 		return true;
 	}
 #else
 	vWarning() << "web filter is only implemented on Windows";
 	Q_UNUSED(message)
+	refreshStatusOverlay();
 #endif
 	return true;
 }

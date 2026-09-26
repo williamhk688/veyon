@@ -1,7 +1,9 @@
 <RCC>
     <qresource prefix="/webfilter">
-        <file>system-lock-screen.png</file>
+        <file>web-filter.png</file>
+        <file>web-filter-block.png</file>
+        <file>web-filter-allow.png</file>
+        <file>web-filter-restore.png</file>
         <file>internet-web-browser.png</file>
-        <file>restore-network.png</file>
     </qresource>
 </RCC>

@@ -35,5 +35,6 @@ public:
 		Reconcile = 4
 	};
 
-	static bool request(Command command, const QStringList& domains = {});
+	static bool request(Command command, const QStringList& domains = {},
+						const QStringList& extraProxies = {});
 };

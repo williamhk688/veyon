@@ -173,16 +173,21 @@ bool isAuthorizedClient(HANDLE pipe)
 	return true;
 }
 
-QByteArray encodeRequest(WindowsWebFilterIpcClient::Command command, const QStringList& domains)
+QByteArray encodeRequest(WindowsWebFilterIpcClient::Command command,
+						 const QStringList& domains,
+						 const QStringList& extraProxies)
 {
 	QByteArray payload;
 	QDataStream out(&payload, QIODevice::WriteOnly);
 	out.setVersion(QDataStream::Qt_5_12);
-	out << quint32(command) << domains;
+	out << quint32(command) << domains << extraProxies;
 	return payload;
 }
 
-bool decodeRequest(const QByteArray& payload, WindowsWebFilterIpcClient::Command* command, QStringList* domains)
+bool decodeRequest(const QByteArray& payload,
+				   WindowsWebFilterIpcClient::Command* command,
+				   QStringList* domains,
+				   QStringList* extraProxies)
 {
 	QDataStream in(payload);
 	in.setVersion(QDataStream::Qt_5_12);
@@ -192,18 +197,24 @@ bool decodeRequest(const QByteArray& payload, WindowsWebFilterIpcClient::Command
 	{
 		return false;
 	}
+	if (in.atEnd() == false)
+	{
+		in >> *extraProxies;
+	}
 	*command = WindowsWebFilterIpcClient::Command(raw);
 	return true;
 }
 
-bool applyCommand(WindowsWebFilterIpcClient::Command command, const QStringList& domains)
+bool applyCommand(WindowsWebFilterIpcClient::Command command,
+				  const QStringList& domains,
+				  const QStringList& extraProxies)
 {
 	switch (command)
 	{
 	case WindowsWebFilterIpcClient::Command::Blacklist:
-		return WebFilterEngine::applyBlacklist(domains);
+		return WebFilterEngine::applyBlacklist(domains, extraProxies);
 	case WindowsWebFilterIpcClient::Command::Whitelist:
-		return WebFilterEngine::applyWhitelist(domains);
+		return WebFilterEngine::applyWhitelist(domains, extraProxies);
 	case WindowsWebFilterIpcClient::Command::Restore:
 		return WebFilterEngine::restore();
 	case WindowsWebFilterIpcClient::Command::Reconcile:
@@ -235,10 +246,11 @@ void handleConnectedClient(HANDLE pipe, HANDLE stopEvent)
 
 	WindowsWebFilterIpcClient::Command command = WindowsWebFilterIpcClient::Command::Restore;
 	QStringList domains;
+	QStringList extraProxies;
 	quint32 result = 0;
-	if (decodeRequest(request, &command, &domains))
+	if (decodeRequest(request, &command, &domains, &extraProxies))
 	{
-		result = applyCommand(command, domains) ? 1 : 0;
+		result = applyCommand(command, domains, extraProxies) ? 1 : 0;
 	}
 
 	if (pipeTransfer(pipe, stopEvent, true, &result, sizeof(result), MessageTimeout) == false)
@@ -327,7 +339,8 @@ void WindowsWebFilterIpcServer::run()
 	CloseHandle(pipe);
 }
 
-bool WindowsWebFilterIpcClient::request(Command command, const QStringList& domains)
+bool WindowsWebFilterIpcClient::request(Command command, const QStringList& domains,
+										const QStringList& extraProxies)
 {
 	HANDLE pipe = INVALID_HANDLE_VALUE;
 	QElapsedTimer timer;
@@ -364,7 +377,7 @@ bool WindowsWebFilterIpcClient::request(Command command, const QStringList& doma
 	DWORD mode = PIPE_READMODE_BYTE;
 	SetNamedPipeHandleState(pipe, &mode, nullptr, nullptr);
 
-	const auto payload = encodeRequest(command, domains);
+	const auto payload = encodeRequest(command, domains, extraProxies);
 	const auto size = quint32(payload.size());
 	DWORD written = 0;
 	if (WriteFile(pipe, &size, sizeof(size), &written, nullptr) == FALSE || written != sizeof(size) ||

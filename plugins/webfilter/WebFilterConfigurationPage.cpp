@@ -27,6 +27,8 @@ WebFilterConfigurationPage::WebFilterConfigurationPage(WebFilterConfiguration& c
 	connect(ui->removeBlockedButton, &QPushButton::clicked, this, &WebFilterConfigurationPage::removeBlockedWebsite);
 	connect(ui->addAllowedButton, &QPushButton::clicked, this, &WebFilterConfigurationPage::addAllowedWebsite);
 	connect(ui->removeAllowedButton, &QPushButton::clicked, this, &WebFilterConfigurationPage::removeAllowedWebsite);
+	connect(ui->addExtraProxyButton, &QPushButton::clicked, this, &WebFilterConfigurationPage::addExtraProxyWebsite);
+	connect(ui->removeExtraProxyButton, &QPushButton::clicked, this, &WebFilterConfigurationPage::removeExtraProxyWebsite);
 }
 
 WebFilterConfigurationPage::~WebFilterConfigurationPage()
@@ -38,9 +40,11 @@ void WebFilterConfigurationPage::resetWidgets()
 {
 	ui->blockedList->clear();
 	ui->allowedList->clear();
+	ui->extraProxyList->clear();
 	ui->hardcodedList->clear();
 	ui->blockedList->addItems(WebFilterLists::fromJson(m_configuration.blockedWebsites()));
 	ui->allowedList->addItems(WebFilterLists::fromJson(m_configuration.allowedWebsites()));
+	ui->extraProxyList->addItems(WebFilterLists::fromJson(m_configuration.extraProxyWebsites()));
 	ui->hardcodedList->addItems(WebFilterLists::hardcodedProxyDomains() + WebFilterLists::hardcodedDohDomains());
 }
 
@@ -99,6 +103,27 @@ void WebFilterConfigurationPage::removeAllowedWebsite()
 	saveLists();
 }
 
+void WebFilterConfigurationPage::addExtraProxyWebsite()
+{
+	const auto domain = QInputDialog::getText(this, tr("加入代理站"), tr("網域 (例如 newproxy.example)"));
+	const auto normalized = WebFilterLists::normalizeDomain(domain);
+	if (normalized.isEmpty() || WebFilterLists::isHardcodedBlocked(normalized))
+	{
+		return;
+	}
+	if (ui->extraProxyList->findItems(normalized, Qt::MatchExactly).isEmpty())
+	{
+		ui->extraProxyList->addItem(normalized);
+	}
+	saveLists();
+}
+
+void WebFilterConfigurationPage::removeExtraProxyWebsite()
+{
+	qDeleteAll(ui->extraProxyList->selectedItems());
+	saveLists();
+}
+
 void WebFilterConfigurationPage::saveLists()
 {
 	QStringList blocked;
@@ -111,7 +136,14 @@ void WebFilterConfigurationPage::saveLists()
 	{
 		allowed.append(ui->allowedList->item(i)->text());
 	}
+	QStringList extraProxies;
+	for (int i = 0; i < ui->extraProxyList->count(); ++i)
+	{
+		extraProxies.append(ui->extraProxyList->item(i)->text());
+	}
+	const auto normalizedExtra = WebFilterLists::normalizeDomains(extraProxies);
 	m_configuration.setBlockedWebsites(WebFilterLists::toJson(blocked));
+	m_configuration.setExtraProxyWebsites(WebFilterLists::toJson(normalizedExtra));
 	m_configuration.setAllowedWebsites(WebFilterLists::toJson(
-		WebFilterLists::effectiveAllowlist(allowed)));
+		WebFilterLists::effectiveAllowlist(allowed, normalizedExtra)));
 }

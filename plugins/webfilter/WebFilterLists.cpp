@@ -215,13 +215,19 @@ QStringList WebFilterLists::fromJson(const QJsonArray& domains)
 
 bool WebFilterLists::isHardcodedBlocked(const QString& domain)
 {
+	return isAlwaysBlocked(domain, {});
+}
+
+
+bool WebFilterLists::isAlwaysBlocked(const QString& domain, const QStringList& extraProxies)
+{
 	const auto normalized = normalizeDomain(domain);
 	if (normalized.isEmpty())
 	{
 		return false;
 	}
 
-	const auto blocked = hardcodedProxyDomains() + hardcodedDohDomains();
+	const auto blocked = hardcodedProxyDomains() + hardcodedDohDomains() + normalizeDomains(extraProxies);
 	for (const auto& parent : blocked)
 	{
 		if (isSubdomainOf(normalized, parent))
@@ -234,18 +240,19 @@ bool WebFilterLists::isHardcodedBlocked(const QString& domain)
 }
 
 
-QStringList WebFilterLists::effectiveBlacklist(const QStringList& schoolBlocked)
+QStringList WebFilterLists::effectiveBlacklist(const QStringList& schoolBlocked, const QStringList& extraProxies)
 {
-	return uniqueSorted(hardcodedProxyDomains() + hardcodedDohDomains() + normalizeDomains(schoolBlocked));
+	return uniqueSorted(hardcodedProxyDomains() + hardcodedDohDomains() +
+						normalizeDomains(extraProxies) + normalizeDomains(schoolBlocked));
 }
 
 
-QStringList WebFilterLists::effectiveAllowlist(const QStringList& schoolAllowed)
+QStringList WebFilterLists::effectiveAllowlist(const QStringList& schoolAllowed, const QStringList& extraProxies)
 {
 	QStringList allowed;
 	for (const auto& domain : normalizeDomains(schoolAllowed))
 	{
-		if (isHardcodedBlocked(domain) == false)
+		if (isAlwaysBlocked(domain, extraProxies) == false)
 		{
 			allowed.append(domain);
 		}
@@ -254,32 +261,107 @@ QStringList WebFilterLists::effectiveAllowlist(const QStringList& schoolAllowed)
 }
 
 
+QStringList WebFilterLists::chromePolicyPatterns(const QStringList& domains)
+{
+	// Chrome/Edge URLBlocklist syntax is [scheme://][.]host[:port][/path]
+	// A leading dot matches the host and every subdomain. Extension-style
+	// *://*.host/* patterns are NOT valid here and make URLAllowlist miss.
+	QStringList patterns;
+	for (const auto& domain : normalizeDomains(domains))
+	{
+		patterns.append(domain);
+		patterns.append(QLatin1Char('.') + domain);
+	}
+	return uniqueSorted(patterns);
+}
+
+
 QStringList WebFilterLists::chromeUrlPatterns(const QStringList& domains)
+{
+	return chromePolicyPatterns(domains);
+}
+
+
+QStringList WebFilterLists::browserAllowPatterns(const QStringList& domains)
+{
+	auto patterns = chromePolicyPatterns(domains);
+	patterns.append({
+		QStringLiteral("about:"),
+		QStringLiteral("chrome://"),
+		QStringLiteral("chrome-extension://"),
+		QStringLiteral("chrome-search://"),
+		QStringLiteral("devtools://"),
+		QStringLiteral("edge://"),
+		QStringLiteral("extension://"),
+	});
+	return uniqueSorted(patterns);
+}
+
+
+QStringList WebFilterLists::firefoxMatchPatterns(const QStringList& domains)
 {
 	QStringList patterns;
 	for (const auto& domain : normalizeDomains(domains))
 	{
-		patterns.append(QStringLiteral("*://") + domain);
 		patterns.append(QStringLiteral("*://") + domain + QStringLiteral("/*"));
-		patterns.append(QStringLiteral("*://*.") + domain);
 		patterns.append(QStringLiteral("*://*.") + domain + QStringLiteral("/*"));
 	}
 	return uniqueSorted(patterns);
 }
 
 
-QStringList WebFilterLists::browserAllowPatterns(const QStringList& domains)
+QString WebFilterLists::proxyPacScript(bool whitelistMode,
+									   const QStringList& domains,
+									   const QStringList& extraBlocked)
 {
-	auto patterns = chromeUrlPatterns(domains);
-	patterns.append({
-		QStringLiteral("about:*"),
-		QStringLiteral("chrome://*"),
-		QStringLiteral("chrome-extension://*"),
-		QStringLiteral("devtools://*"),
-		QStringLiteral("edge://*"),
-		QStringLiteral("extension://*"),
-	});
-	return uniqueSorted(patterns);
+	QString body;
+	if (whitelistMode)
+	{
+		for (const auto& domain : normalizeDomains(domains))
+		{
+			if (isAlwaysBlocked(domain, extraBlocked))
+			{
+				continue;
+			}
+			const auto escaped = QString(domain).replace(QLatin1Char('\\'), QLatin1String("\\\\"))
+									.replace(QLatin1Char('"'), QLatin1String("\\\""));
+			body += QStringLiteral("  if (hostMatches(host, \"%1\")) return \"DIRECT\";\n").arg(escaped);
+		}
+		for (const auto& domain : uniqueSorted(hardcodedProxyDomains() + hardcodedDohDomains() +
+											   normalizeDomains(extraBlocked)))
+		{
+			const auto escaped = QString(domain).replace(QLatin1Char('\\'), QLatin1String("\\\\"))
+									.replace(QLatin1Char('"'), QLatin1String("\\\""));
+			body += QStringLiteral("  if (hostMatches(host, \"%1\")) return \"PROXY 127.0.0.1:9\";\n").arg(escaped);
+		}
+		body += QStringLiteral("  return \"PROXY 127.0.0.1:9\";\n");
+	}
+	else
+	{
+		for (const auto& domain : uniqueSorted(hardcodedProxyDomains() + hardcodedDohDomains() +
+											   normalizeDomains(extraBlocked) + normalizeDomains(domains)))
+		{
+			const auto escaped = QString(domain).replace(QLatin1Char('\\'), QLatin1String("\\\\"))
+									.replace(QLatin1Char('"'), QLatin1String("\\\""));
+			body += QStringLiteral("  if (hostMatches(host, \"%1\")) return \"PROXY 127.0.0.1:9\";\n").arg(escaped);
+		}
+		body += QStringLiteral("  return \"DIRECT\";\n");
+	}
+
+	return QStringLiteral(
+			   "function hostMatches(host, domain) {\n"
+			   "  host = host.toLowerCase();\n"
+			   "  domain = domain.toLowerCase();\n"
+			   "  return host === domain || dnsDomainIs(host, domain) || host.endsWith('.' + domain);\n"
+			   "}\n"
+			   "function FindProxyForURL(url, host) {\n"
+			   "  if (!host) return \"DIRECT\";\n"
+			   "  if (isPlainHostName(host) || host === \"localhost\") return \"DIRECT\";\n"
+			   "  if (isInNet(host, \"127.0.0.0\", \"255.0.0.0\")) return \"DIRECT\";\n"
+			   "  if (isInNet(host, \"10.0.0.0\", \"255.0.0.0\")) return \"DIRECT\";\n"
+			   "  if (isInNet(host, \"172.16.0.0\", \"255.240.0.0\")) return \"DIRECT\";\n"
+			   "  if (isInNet(host, \"192.168.0.0\", \"255.255.0.0\")) return \"DIRECT\";\n")
+		   + body + QStringLiteral("}\n");
 }
 
 

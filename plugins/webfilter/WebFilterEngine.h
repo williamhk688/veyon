@@ -13,8 +13,8 @@
 class WebFilterEngine
 {
 public:
-	static bool applyBlacklist(const QStringList& schoolBlocked);
-	static bool applyWhitelist(const QStringList& schoolAllowed);
+	static bool applyBlacklist(const QStringList& schoolBlocked, const QStringList& extraProxies = {});
+	static bool applyWhitelist(const QStringList& schoolAllowed, const QStringList& extraProxies = {});
 	static bool restore();
 	static bool reconcileOnServiceStart();
 };

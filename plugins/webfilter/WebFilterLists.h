@@ -23,12 +23,20 @@ public:
 	static QJsonArray toJson(const QStringList& domains);
 	static QStringList fromJson(const QJsonArray& domains);
 
-	static QStringList effectiveBlacklist(const QStringList& schoolBlocked);
-	static QStringList effectiveAllowlist(const QStringList& schoolAllowed);
+	static QStringList effectiveBlacklist(const QStringList& schoolBlocked,
+										 const QStringList& extraProxies = {});
+	static QStringList effectiveAllowlist(const QStringList& schoolAllowed,
+										 const QStringList& extraProxies = {});
 	static bool isHardcodedBlocked(const QString& domain);
+	static bool isAlwaysBlocked(const QString& domain, const QStringList& extraProxies = {});
+	static QStringList chromePolicyPatterns(const QStringList& domains);
 	static QStringList chromeUrlPatterns(const QStringList& domains);
 	static QStringList hostsNames(const QStringList& domains);
 	static QStringList browserAllowPatterns(const QStringList& domains);
+	static QStringList firefoxMatchPatterns(const QStringList& domains);
+	static QString proxyPacScript(bool whitelistMode,
+								 const QStringList& domains,
+								 const QStringList& extraBlocked = {});
 
 	static constexpr auto HostsBeginMarker = "# ----- VEYON-WEBFILTER-BEGIN -----";
 	static constexpr auto HostsEndMarker = "# ----- VEYON-WEBFILTER-END -----";

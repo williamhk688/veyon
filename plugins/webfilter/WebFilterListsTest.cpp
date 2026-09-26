@@ -38,12 +38,45 @@ private slots:
 
 	void blacklistAlwaysIncludesProxies()
 	{
-		const auto list = WebFilterLists::effectiveBlacklist({QStringLiteral("pornhub.com")});
+		const auto list = WebFilterLists::effectiveBlacklist({QStringLiteral("pornhub.com")},
+															 {QStringLiteral("schoolproxy.test")});
 		QVERIFY(list.contains(QStringLiteral("pornhub.com")));
 		QVERIFY(list.contains(QStringLiteral("proxysite.com")));
 		QVERIFY(list.contains(QStringLiteral("kproxy.com")));
 		QVERIFY(list.contains(QStringLiteral("hide.me")));
 		QVERIFY(list.contains(QStringLiteral("dns.google")));
+		QVERIFY(list.contains(QStringLiteral("schoolproxy.test")));
+	}
+
+	void extraProxyCannotBeAllowed()
+	{
+		const auto allowed = WebFilterLists::effectiveAllowlist(
+			{QStringLiteral("classroom.google.com"), QStringLiteral("schoolproxy.test")},
+			{QStringLiteral("schoolproxy.test")});
+		QVERIFY(allowed.contains(QStringLiteral("classroom.google.com")));
+		QVERIFY(allowed.contains(QStringLiteral("schoolproxy.test")) == false);
+	}
+
+	void chromePolicyUsesHostDotSyntax()
+	{
+		const auto patterns = WebFilterLists::chromePolicyPatterns({QStringLiteral("classroom.google.com")});
+		QVERIFY(patterns.contains(QStringLiteral("classroom.google.com")));
+		QVERIFY(patterns.contains(QStringLiteral(".classroom.google.com")));
+		for (const auto& pattern : patterns)
+		{
+			QVERIFY(pattern.contains(QLatin1String("*://")) == false);
+		}
+	}
+
+	void whitelistPacAllowsListedHost()
+	{
+		const auto pac = WebFilterLists::proxyPacScript(
+			true, {QStringLiteral("classroom.google.com")}, {QStringLiteral("schoolproxy.test")});
+		QVERIFY(pac.contains(QLatin1String("function FindProxyForURL")));
+		QVERIFY(pac.contains(QLatin1String("hostMatches(host, \"classroom.google.com\")")) );
+		QVERIFY(pac.contains(QLatin1String("return \"DIRECT\"")));
+		QVERIFY(pac.contains(QLatin1String("schoolproxy.test")));
+		QVERIFY(pac.contains(QLatin1String("PROXY 127.0.0.1:9")));
 	}
 
 	void hostsSectionRoundTrip()

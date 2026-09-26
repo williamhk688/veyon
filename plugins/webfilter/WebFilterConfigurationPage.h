@@ -32,6 +32,8 @@ private:
 	void removeBlockedWebsite();
 	void addAllowedWebsite();
 	void removeAllowedWebsite();
+	void addExtraProxyWebsite();
+	void removeExtraProxyWebsite();
 	void saveLists();
 
 	Ui::WebFilterConfigurationPage* ui;

@@ -11,13 +11,13 @@
 #include "VeyonCore.h"
 #include "WebFilterEngine.h"
 
-bool WebFilterEngine::applyBlacklist(const QStringList&)
+bool WebFilterEngine::applyBlacklist(const QStringList&, const QStringList&)
 {
 	vWarning() << "web filter is only implemented on Windows";
 	return false;
 }
 
-bool WebFilterEngine::applyWhitelist(const QStringList&)
+bool WebFilterEngine::applyWhitelist(const QStringList&, const QStringList&)
 {
 	vWarning() << "web filter is only implemented on Windows";
 	return false;

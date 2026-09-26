@@ -7,7 +7,7 @@
   </property>
   <property name="windowIcon">
    <iconset resource="webfilter.qrc">
-    <normaloff>:/webfilter/internet-web-browser.png</normaloff>:/webfilter/internet-web-browser.png</iconset>
+    <normaloff>:/webfilter/web-filter.png</normaloff>:/webfilter/web-filter.png</iconset>
   </property>
   <layout class="QVBoxLayout" name="verticalLayout">
    <property name="topMargin">
@@ -22,7 +22,7 @@
       <bool>true</bool>
      </property>
      <property name="text">
-      <string>Master 的「封鎖不良網站」會套用內建代理站加上下列不良網站。「只准課堂網站」只准下列課堂網站，並永遠放行 Veyon。Google 翻譯不會寫死封鎖。內建名單教師不能刪。</string>
+      <string>工具列「網絡管制」可選封鎖不良網站、只准課堂網站或恢復網絡。內建代理站不能刪；可用下面按鈕新增學校自己的代理站。Google 翻譯不會寫死封鎖。Veyon 通訊永遠可通。</string>
      </property>
     </widget>
    </item>
@@ -101,9 +101,46 @@
     </widget>
    </item>
    <item>
+    <widget class="QGroupBox" name="extraProxyGroup">
+     <property name="title">
+      <string>新增代理站（可刪）</string>
+     </property>
+     <layout class="QVBoxLayout" name="extraProxyLayout">
+      <item>
+       <widget class="QListWidget" name="extraProxyList"/>
+      </item>
+      <item>
+       <layout class="QHBoxLayout" name="extraProxyButtons">
+        <item>
+         <widget class="QPushButton" name="addExtraProxyButton">
+          <property name="text">
+           <string>加入代理站</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="removeExtraProxyButton">
+          <property name="text">
+           <string>刪除</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <spacer name="extraProxySpacer">
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+         </spacer>
+        </item>
+       </layout>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
     <widget class="QGroupBox" name="hardcodedGroup">
      <property name="title">
-      <string>內建封鎖（代理站／加密 DNS，不能刪）</string>
+      <string>內建封鎖（代理站／加密 DNS，不能刪、不能改）</string>
      </property>
      <layout class="QVBoxLayout" name="hardcodedLayout">
       <item>

@@ -15,6 +15,7 @@
 #ifdef Q_OS_WIN
 class WindowsWebFilterIpcServer;
 #endif
+class WebFilterStatusOverlay;
 
 class WebFilterFeaturePlugin : public QObject, PluginInterface,
 		FeatureProviderInterface,
@@ -26,12 +27,13 @@ class WebFilterFeaturePlugin : public QObject, PluginInterface,
 public:
 	enum class Argument
 	{
-		Domains
+		Domains,
+		ExtraProxies
 	};
 	Q_ENUM(Argument)
 
 	explicit WebFilterFeaturePlugin(QObject* parent = nullptr);
-	~WebFilterFeaturePlugin() override = default;
+	~WebFilterFeaturePlugin() override;
 
 	Plugin::Uid uid() const override
 	{
@@ -40,7 +42,7 @@ public:
 
 	QVersionNumber version() const override
 	{
-		return QVersionNumber(1, 2);
+		return QVersionNumber(1, 3);
 	}
 
 	QString name() const override
@@ -91,14 +93,19 @@ private:
 	};
 
 	void startServiceHelper();
+	void startStatusOverlay();
+	void refreshStatusOverlay();
 	QStringList configuredBlockedDomains() const;
 	QStringList configuredAllowedDomains() const;
+	QStringList configuredExtraProxyDomains() const;
 
 	WebFilterConfiguration m_configuration;
+	const Feature m_webFilterFeature;
 	const Feature m_blacklistFeature;
 	const Feature m_whitelistFeature;
 	const Feature m_restoreFeature;
 	const FeatureList m_features;
+	WebFilterStatusOverlay* m_statusOverlay = nullptr;
 #ifdef Q_OS_WIN
 	WindowsWebFilterIpcServer* m_ipcServer = nullptr;
 #endif

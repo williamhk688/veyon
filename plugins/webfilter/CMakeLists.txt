@@ -13,6 +13,8 @@ set(webfilter_sources
 	PersistentWebFilterState.h
 	WebFilterEngine.cpp
 	WebFilterEngine.h
+	WebFilterStatusOverlay.cpp
+	WebFilterStatusOverlay.h
 	webfilter.qrc
 	)
 
@@ -26,6 +28,10 @@ endif()
 build_veyon_plugin(webfilter
 	NAME WebFilter
 	SOURCES ${webfilter_sources})
+
+if(VEYON_BUILD_WINDOWS)
+	target_link_libraries(webfilter PRIVATE -lwininet -lshell32)
+endif()
 
 if(WITH_TESTS)
 	add_executable(WebFilterListsTest
