@@ -6,6 +6,8 @@
  * This file is part of Veyon - https://veyon.io
  */
 
+#include <memory>
+
 #include <QFile>
 #include <QSettings>
 
@@ -66,10 +68,10 @@ static QString testStateFilePath()
 }
 
 
-static QSettings testSettings()
+static std::unique_ptr<QSettings> testSettings()
 {
-	QSettings settings(testStateFilePath(), QSettings::IniFormat);
-	settings.setFallbacksEnabled(false);
+	auto settings = std::make_unique<QSettings>(testStateFilePath(), QSettings::IniFormat);
+	settings->setFallbacksEnabled(false);
 	return settings;
 }
 
@@ -156,7 +158,7 @@ PersistentWebFilterState::Mode PersistentWebFilterState::readMode()
 {
 	if (testStateFilePath().isEmpty() == false)
 	{
-		return modeFromString(testSettings().value(ModeKey).toString());
+		return modeFromString(testSettings()->value(ModeKey).toString());
 	}
 
 #ifdef Q_OS_WIN
@@ -174,15 +176,15 @@ bool PersistentWebFilterState::writeMode(Mode mode)
 		if (mode == Mode::Off)
 		{
 			auto settings = testSettings();
-			settings.remove(ModeKey);
-			settings.sync();
-			return settings.status() == QSettings::NoError;
+			settings->remove(ModeKey);
+			settings->sync();
+			return settings->status() == QSettings::NoError;
 		}
 
 		auto settings = testSettings();
-		settings.setValue(ModeKey, modeToString(mode));
-		settings.sync();
-		return settings.status() == QSettings::NoError;
+		settings->setValue(ModeKey, modeToString(mode));
+		settings->sync();
+		return settings->status() == QSettings::NoError;
 	}
 
 #ifdef Q_OS_WIN
@@ -199,7 +201,7 @@ QStringList PersistentWebFilterState::readDomains()
 	QString text;
 	if (testStateFilePath().isEmpty() == false)
 	{
-		text = testSettings().value(DomainsKey).toString();
+		text = testSettings()->value(DomainsKey).toString();
 	}
 #ifdef Q_OS_WIN
 	else
@@ -219,14 +221,14 @@ bool PersistentWebFilterState::writeDomains(const QStringList& domains)
 		auto settings = testSettings();
 		if (text.isEmpty())
 		{
-			settings.remove(DomainsKey);
+			settings->remove(DomainsKey);
 		}
 		else
 		{
-			settings.setValue(DomainsKey, text);
+			settings->setValue(DomainsKey, text);
 		}
-		settings.sync();
-		return settings.status() == QSettings::NoError;
+		settings->sync();
+		return settings->status() == QSettings::NoError;
 	}
 
 #ifdef Q_OS_WIN
@@ -242,7 +244,7 @@ QString PersistentWebFilterState::readSnapshot()
 {
 	if (testStateFilePath().isEmpty() == false)
 	{
-		return testSettings().value(SnapshotKey).toString();
+		return testSettings()->value(SnapshotKey).toString();
 	}
 
 #ifdef Q_OS_WIN
@@ -260,14 +262,14 @@ bool PersistentWebFilterState::writeSnapshot(const QString& snapshot)
 		auto settings = testSettings();
 		if (snapshot.isEmpty())
 		{
-			settings.remove(SnapshotKey);
+			settings->remove(SnapshotKey);
 		}
 		else
 		{
-			settings.setValue(SnapshotKey, snapshot);
+			settings->setValue(SnapshotKey, snapshot);
 		}
-		settings.sync();
-		return settings.status() == QSettings::NoError;
+		settings->sync();
+		return settings->status() == QSettings::NoError;
 	}
 
 #ifdef Q_OS_WIN

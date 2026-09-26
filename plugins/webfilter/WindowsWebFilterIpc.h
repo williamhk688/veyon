@@ -8,8 +8,6 @@
 
 #pragma once
 
-#ifdef Q_OS_WIN
-
 #include <QStringList>
 #include <QThread>
 
@@ -39,5 +37,3 @@ public:
 
 	static bool request(Command command, const QStringList& domains = {});
 };
-
-#endif

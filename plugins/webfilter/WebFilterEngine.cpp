@@ -6,7 +6,7 @@
  * This file is part of Veyon - https://veyon.io
  */
 
-#ifndef Q_OS_WIN
+#if !defined(_WIN32)
 
 #include "VeyonCore.h"
 #include "WebFilterEngine.h"
