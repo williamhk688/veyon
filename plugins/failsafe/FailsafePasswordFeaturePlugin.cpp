@@ -49,23 +49,31 @@
 
 FailsafePasswordFeaturePlugin::FailsafePasswordFeaturePlugin(QObject* parent) :
 	QObject(parent),
+	m_parentFeature(QStringLiteral("EmergencyUnlockRecover"),
+					Feature::Flag::Action | Feature::Flag::Master,
+					Feature::Uid(QStringLiteral("a7c3e1f0-9b2d-4e58-8f14-6d0c2a9b5e71")),
+					Feature::Uid(),
+					tr("Emergency Unlock & Recover (緊急解鎖與自救)"), {},
+					tr("Change the failsafe unlock password or open the teacher "
+					   "self-rescue handbook."),
+					QStringLiteral(":/core/help-about.png")),
 	m_changePasswordFeature(QStringLiteral("ChangeFailsafePassword"),
 							Feature::Flag::Action | Feature::Flag::Master | Feature::Flag::Service,
 							Feature::Uid(QStringLiteral("5b8d2c91-4e7a-4f03-9c6b-2a1d8e5f7044")),
-							Feature::Uid(),
-							tr("修改解鎖密碼 (Change Failsafe Password)"), {},
+							m_parentFeature.uid(),
+							tr("Change Failsafe Password (修改解鎖密碼)"), {},
 							tr("Send a new failsafe unlock password to the selected computers "
 							   "and report which clients stored it successfully."),
 							QStringLiteral(":/core/document-edit.png")),
 	m_selfRescueFeature(QStringLiteral("TeacherSelfRescue"),
 						Feature::Flag::Action | Feature::Flag::Master,
 						Feature::Uid(QStringLiteral("8d1f6e2a-4c9b-4a73-b5e0-1c7f9a2d6b48")),
-						Feature::Uid(),
-						tr("教師自救手冊 (Teacher Self-Rescue)"), {},
+						m_parentFeature.uid(),
+						tr("Teacher Self-Rescue (教師自救手冊)"), {},
 						tr("Open the teacher self-rescue handbook after a privacy warning "
 						   "and three security questions. Does not send anything to students."),
 						QStringLiteral(":/core/help-about.png")),
-	m_features({ m_changePasswordFeature, m_selfRescueFeature })
+	m_features({ m_parentFeature, m_changePasswordFeature, m_selfRescueFeature })
 {
 }
 
@@ -95,6 +103,11 @@ bool FailsafePasswordFeaturePlugin::controlFeature(Feature::Uid featureUid, Oper
 bool FailsafePasswordFeaturePlugin::startFeature(VeyonMasterInterface& master, const Feature& feature,
 												 const ComputerControlInterfaceList& computerControlInterfaces)
 {
+	if (feature.uid() == m_parentFeature.uid())
+	{
+		return true;
+	}
+
 	if (feature.uid() == m_selfRescueFeature.uid())
 	{
 		TeacherSelfRescue::run(master.mainWindow());

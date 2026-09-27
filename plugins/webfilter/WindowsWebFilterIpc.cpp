@@ -18,6 +18,8 @@
 
 #include "VeyonCore.h"
 #include "WebFilterEngine.h"
+#include "WebFilterSessionPolicy.h"
+#include "WebFilterSessionWatchdog.h"
 #include "WindowsWebFilterIpc.h"
 
 static constexpr auto SocketWaitTimeout = 3000;
@@ -175,19 +177,24 @@ bool isAuthorizedClient(HANDLE pipe)
 
 QByteArray encodeRequest(WindowsWebFilterIpcClient::Command command,
 						 const QStringList& domains,
-						 const QStringList& extraProxies)
+						 const QStringList& extraProxies,
+						 const WebFilterSession& session,
+						 WebFilterSession::StopReason reason)
 {
 	QByteArray payload;
 	QDataStream out(&payload, QIODevice::WriteOnly);
 	out.setVersion(QDataStream::Qt_5_12);
-	out << quint32(command) << domains << extraProxies;
+	out << quint32(command) << domains << extraProxies
+		<< session.toJsonText() << qint32(reason);
 	return payload;
 }
 
 bool decodeRequest(const QByteArray& payload,
 				   WindowsWebFilterIpcClient::Command* command,
 				   QStringList* domains,
-				   QStringList* extraProxies)
+				   QStringList* extraProxies,
+				   WebFilterSession* session,
+				   WebFilterSession::StopReason* reason)
 {
 	QDataStream in(payload);
 	in.setVersion(QDataStream::Qt_5_12);
@@ -201,22 +208,41 @@ bool decodeRequest(const QByteArray& payload,
 	{
 		in >> *extraProxies;
 	}
+	if (in.atEnd() == false)
+	{
+		QString sessionText;
+		in >> sessionText;
+		bool ok = false;
+		*session = WebFilterSession::fromJsonText(sessionText, &ok);
+		if (ok == false)
+		{
+			*session = {};
+		}
+	}
+	if (in.atEnd() == false)
+	{
+		qint32 rawReason = 0;
+		in >> rawReason;
+		*reason = WebFilterSession::StopReason(rawReason);
+	}
 	*command = WindowsWebFilterIpcClient::Command(raw);
 	return true;
 }
 
 bool applyCommand(WindowsWebFilterIpcClient::Command command,
 				  const QStringList& domains,
-				  const QStringList& extraProxies)
+				  const QStringList& extraProxies,
+				  const WebFilterSession& session,
+				  WebFilterSession::StopReason reason)
 {
 	switch (command)
 	{
 	case WindowsWebFilterIpcClient::Command::Blacklist:
-		return WebFilterEngine::applyBlacklist(domains, extraProxies);
+		return WebFilterEngine::applyBlacklist(domains, extraProxies, true, session);
 	case WindowsWebFilterIpcClient::Command::Whitelist:
-		return WebFilterEngine::applyWhitelist(domains, extraProxies);
+		return WebFilterEngine::applyWhitelist(domains, extraProxies, true, session);
 	case WindowsWebFilterIpcClient::Command::Restore:
-		return WebFilterEngine::restore();
+		return WebFilterEngine::stopSession(session.sessionId, reason);
 	case WindowsWebFilterIpcClient::Command::Reconcile:
 		return WebFilterEngine::reconcileOnServiceStart();
 	}
@@ -247,10 +273,12 @@ void handleConnectedClient(HANDLE pipe, HANDLE stopEvent)
 	WindowsWebFilterIpcClient::Command command = WindowsWebFilterIpcClient::Command::Restore;
 	QStringList domains;
 	QStringList extraProxies;
+	WebFilterSession session;
+	auto reason = WebFilterSession::StopReason::TeacherManual;
 	quint32 result = 0;
-	if (decodeRequest(request, &command, &domains, &extraProxies))
+	if (decodeRequest(request, &command, &domains, &extraProxies, &session, &reason))
 	{
-		result = applyCommand(command, domains, extraProxies) ? 1 : 0;
+		result = applyCommand(command, domains, extraProxies, session, reason) ? 1 : 0;
 	}
 
 	if (pipeTransfer(pipe, stopEvent, true, &result, sizeof(result), MessageTimeout) == false)
@@ -297,6 +325,7 @@ void WindowsWebFilterIpcServer::run()
 
 	// Runs on this helper thread after Service/Server startup can proceed.
 	WebFilterEngine::reconcileOnServiceStart();
+	WebFilterSessionWatchdog watchdog;
 
 	vInfo() << "web filter helper listening";
 
@@ -321,7 +350,24 @@ void WindowsWebFilterIpcServer::run()
 			}
 			else if (error == ERROR_IO_PENDING)
 			{
-				ready = waitOverlapped(pipe, &overlapped, stopEvent, INFINITE, &unused);
+				while (WaitForSingleObject(stopEvent, 0) != WAIT_OBJECT_0)
+				{
+					watchdog.poll();
+					HANDLE waits[2] = { overlapped.hEvent, stopEvent };
+					const DWORD waited = WaitForMultipleObjects(2, waits, FALSE,
+																DWORD(WebFilterSessionPolicy::WatchdogIntervalMs));
+					if (waited == WAIT_OBJECT_0)
+					{
+						ready = GetOverlappedResult(pipe, &overlapped, &unused, FALSE) != FALSE;
+						break;
+					}
+					if (waited == WAIT_OBJECT_0 + 1)
+					{
+						CancelIoEx(pipe, &overlapped);
+						GetOverlappedResult(pipe, &overlapped, &unused, FALSE);
+						break;
+					}
+				}
 			}
 		}
 		CloseHandle(overlapped.hEvent);
@@ -343,7 +389,9 @@ void WindowsWebFilterIpcServer::run()
 }
 
 bool WindowsWebFilterIpcClient::request(Command command, const QStringList& domains,
-										const QStringList& extraProxies)
+										const QStringList& extraProxies,
+										const WebFilterSession& session,
+										WebFilterSession::StopReason reason)
 {
 	HANDLE pipe = INVALID_HANDLE_VALUE;
 	QElapsedTimer timer;
@@ -380,7 +428,7 @@ bool WindowsWebFilterIpcClient::request(Command command, const QStringList& doma
 	DWORD mode = PIPE_READMODE_BYTE;
 	SetNamedPipeHandleState(pipe, &mode, nullptr, nullptr);
 
-	const auto payload = encodeRequest(command, domains, extraProxies);
+	const auto payload = encodeRequest(command, domains, extraProxies, session, reason);
 	const auto size = quint32(payload.size());
 	DWORD written = 0;
 	if (WriteFile(pipe, &size, sizeof(size), &written, nullptr) == FALSE || written != sizeof(size) ||

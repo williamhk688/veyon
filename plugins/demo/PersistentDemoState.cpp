@@ -7,9 +7,13 @@
  */
 
 #include <QFile>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QSettings>
 #include <QUuid>
 
+#include "ClassroomPersistStore.h"
+#include "FailsafePasswordState.h"
 #include "PersistentDemoState.h"
 #include "VeyonCore.h"
 
@@ -60,6 +64,44 @@ static QRect viewportFromString(const QString& value)
 	}
 
 	return QRect(parts[0].toInt(), parts[1].toInt(), parts[2].toInt(), parts[3].toInt());
+}
+
+
+static QString snapshotToJson(const PersistentDemoState::Snapshot& snapshot)
+{
+	if (snapshot.isValid() == false)
+	{
+		return {};
+	}
+
+	QJsonObject object;
+	object.insert(FeatureUidKey, snapshot.featureUid.toString(QUuid::WithoutBraces));
+	object.insert(DemoServerHostKey, snapshot.demoServerHost);
+	object.insert(DemoServerPortKey, snapshot.demoServerPort);
+	object.insert(DemoAccessTokenKey, QString::fromLatin1(snapshot.demoAccessToken.toHex()));
+	object.insert(ViewportKey, viewportToString(snapshot.viewport));
+	object.insert(LockInputKey, snapshot.lockInput);
+	return QString::fromUtf8(QJsonDocument(object).toJson(QJsonDocument::Compact));
+}
+
+
+static PersistentDemoState::Snapshot snapshotFromJson(const QString& text)
+{
+	const auto document = QJsonDocument::fromJson(text.toUtf8());
+	if (document.isObject() == false)
+	{
+		return {};
+	}
+
+	const auto object = document.object();
+	PersistentDemoState::Snapshot snapshot;
+	snapshot.featureUid = Feature::Uid{object.value(FeatureUidKey).toString()};
+	snapshot.demoServerHost = object.value(DemoServerHostKey).toString();
+	snapshot.demoServerPort = object.value(DemoServerPortKey).toInt();
+	snapshot.demoAccessToken = QByteArray::fromHex(object.value(DemoAccessTokenKey).toString().toLatin1());
+	snapshot.viewport = viewportFromString(object.value(ViewportKey).toString());
+	snapshot.lockInput = object.value(LockInputKey).toBool();
+	return snapshot;
 }
 
 
@@ -218,6 +260,7 @@ static bool writeToRegistry(const PersistentDemoState::Snapshot& snapshot)
 		RegDeleteValueW(key, VeyonDemoAccessTokenValue);
 		RegDeleteValueW(key, VeyonDemoViewportValue);
 		RegDeleteValueW(key, VeyonDemoLockInputValue);
+		RegFlushKey(key);
 		RegCloseKey(key);
 		return true;
 	}
@@ -230,6 +273,7 @@ static bool writeToRegistry(const PersistentDemoState::Snapshot& snapshot)
 		writeRegistryString(key, VeyonDemoViewportValue, viewportToString(snapshot.viewport)) &&
 		writeRegistryString(key, VeyonDemoLockInputValue, snapshot.lockInput ? QStringLiteral("1") : QStringLiteral("0"));
 
+	RegFlushKey(key);
 	RegCloseKey(key);
 
 	if (ok == false)
@@ -251,7 +295,17 @@ PersistentDemoState::Snapshot PersistentDemoState::readSnapshot()
 	}
 
 #ifdef Q_OS_WIN
-	return readFromRegistry();
+	auto snapshot = readFromRegistry();
+	if (snapshot.isValid())
+	{
+		return snapshot;
+	}
+	snapshot = snapshotFromJson(ClassroomPersistStore::readValue(ClassroomPersistStore::demoName()));
+	if (snapshot.isValid())
+	{
+		writeToRegistry(snapshot);
+	}
+	return snapshot;
 #else
 	return {};
 #endif
@@ -267,6 +321,7 @@ bool PersistentDemoState::writeSnapshot(const Snapshot& snapshot)
 	}
 
 #ifdef Q_OS_WIN
+	ClassroomPersistStore::writeValue(ClassroomPersistStore::demoName(), snapshotToJson(snapshot));
 	return writeToRegistry(snapshot);
 #else
 	Q_UNUSED(snapshot)
@@ -309,6 +364,7 @@ bool PersistentDemoState::setActive(const Snapshot& snapshot)
 		return false;
 	}
 
+	FailsafePasswordState::clearEmergencyUnlockNote();
 	vInfo() << "persisted demo" << snapshot.featureUid << snapshot.demoServerHost << snapshot.demoServerPort;
 	return true;
 }

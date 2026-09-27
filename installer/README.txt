@@ -1,29 +1,57 @@
 CYC Veyon 4.11.2 (based on Veyon) — Windows 64-bit installer
 ============================================================
 
-This branch (cursor/classroom-web-filter-ecca) adds classroom web
-filter on top of the WOL edition.
+This branch (feature/web-filter-session) adds timed WebFilterSession
+on top of the classroom web filter / WOL edition.
 
-Master: one 「網絡管制 (Web filter)」 button with a dropdown
-  - 封鎖黑名單網站 (Block blacklist sites)
-  - 只允許白名單網站 (Allow whitelist sites only)
-  - 恢復網絡 (Restore web)
+Master: one 「Web filter (網絡管制)」 button with a dropdown
+  - Block blacklist sites (封鎖黑名單網站)
+  - Allow whitelist sites only (只允許白名單網站)
+  - Restore web (恢復網絡)
+  - View remaining time (查看剩餘時間) — only while a session is active
 
-The computer-tile icon follows the current mode: red block for
-blacklist, green globe for whitelist. Restore removes the badge.
-Configurator sidebar title is 「Web filter (網絡管制)」.
-Whitelist allow rules include http/https scheme forms so listed
-classroom sites can open.
+Starting blacklist or whitelist asks for a lock duration
+(10/20/30/45/60 minutes, custom duration, or custom end time).
+The countdown window does not stay open; open it from View remaining time.
+Restore web ends the active session and does not delete configured
+lists. Unexpired sessions survive reboot until duration or the
+configurable hard TTL (default 180 minutes).
+
+Emergency Unlock & Recover (緊急解鎖與自救) is the last toolbar item
+(after Screenshot). It opens a dropdown with:
+  - Change Failsafe Password (修改解鎖密碼)
+  - Teacher Self-Rescue (教師自救手冊)
+
+Ctrl+Alt+Shift+U still uses the failsafe password and also clears a
+temporary web filter. The same session is not reapplied after that
+hotkey; a new teacher session still applies. After a successful
+hotkey unlock the Windows service releases Interception so the
+keyboard works without waiting for Master Unlock / Stop Demo.
+
+A leftover EmergencyUnlock value from an earlier hotkey no longer
+wipes lock or web filter on the next boot. That flag is volatile
+(same boot only). Lock, demo, and web-filter flags are written to
+HKLM (VeyonScreenLock / VeyonDemo / VeyonWebFilter) and mirrored
+under %ProgramData%\Veyon\classroom-persist so a reboot keeps the
+restriction until the teacher restores it or the session expires.
+
+Unplugging student Wi-Fi does not unlock the session. While the
+PC is on, the countdown uses powered-on time and ignores system
+clock changes. After a real reboot, a volatile boot id detects
+the new boot even when Windows has already been up longer than
+the previous checkpoint tick, and recovery adds the wall-clock
+gap so shutdown time still counts. Changing the clock without
+admin rights is normally blocked on student accounts.
 
 Install this package on both the teacher PC and every student PC,
 then restart Veyon Service.
 
 Direct download:
 
-  https://github.com/williamhk688/veyon/raw/cursor/classroom-web-filter-ecca/installer/veyon_4_11_2_win64_modified_setup.exe
+  https://github.com/williamhk688/veyon/raw/feature/web-filter-session/installer/veyon_4_11_2_win64_modified_setup.exe
 
-Source: 220ae180
-Branch: cursor/classroom-web-filter-ecca
+Source: f3bc4968
+Branch: feature/web-filter-session
 
 SHA-256:
-  1e64e38b3840519c946581140392c6965e90653ffd2857a24a9eb45287dc75ea
+  868e04b782869aa7be8969a327214e27ac201f940dbc2bad3d05afa261a1bf7f

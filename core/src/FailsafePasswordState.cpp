@@ -25,6 +25,7 @@
 #include <QFile>
 #include <QSettings>
 
+#include "ClassroomPersistStore.h"
 #include "FailsafePasswordState.h"
 #include "Logger.h"
 
@@ -38,6 +39,7 @@
 
 static const auto PasswordKey = QStringLiteral("FailsafePassword");
 static const auto LastKnownPasswordKey = QStringLiteral("LastKnownPassword");
+static const auto EmergencyUnlockKey = QStringLiteral("EmergencyUnlock");
 static const auto PasswordFileEnvVar = QByteArrayLiteral("VEYON_FAILSAFE_PASSWORD_FILE");
 static const auto ScreenLockStateFileEnvVar = QByteArrayLiteral("VEYON_SCREENLOCK_STATE_FILE");
 static const auto DemoStateFileEnvVar = QByteArrayLiteral("VEYON_DEMO_STATE_FILE");
@@ -327,6 +329,7 @@ bool FailsafePasswordState::clearPersistedInputLocks()
 	{
 		ok = deleteRegistryKey(VeyonScreenLockRegistryKey) && ok;
 		ok = deleteRegistryKey(VeyonDemoRegistryKey) && ok;
+		ok = ClassroomPersistStore::removeClassroomLocks() && ok;
 	}
 #endif
 
@@ -336,4 +339,144 @@ bool FailsafePasswordState::clearPersistedInputLocks()
 	}
 
 	return ok;
+}
+
+
+
+static bool writeEmergencyUnlockFlag(bool enabled)
+{
+	const auto path = passwordTestFilePath();
+	if (path.isEmpty() == false)
+	{
+		QSettings settings(path, QSettings::IniFormat);
+		settings.setFallbacksEnabled(false);
+		if (enabled)
+		{
+			settings.setValue(EmergencyUnlockKey, 1);
+		}
+		else
+		{
+			settings.remove(EmergencyUnlockKey);
+		}
+		settings.sync();
+		return settings.status() == QSettings::NoError;
+	}
+
+#ifdef Q_OS_WIN
+	HKEY key = nullptr;
+	DWORD disposition = 0;
+	if (RegCreateKeyExW(HKEY_LOCAL_MACHINE, VeyonFailsafeRuntimeRegistryKey, 0, nullptr,
+						REG_OPTION_VOLATILE, KEY_WRITE | KEY_WOW64_64KEY,
+						nullptr, &key, &disposition) != ERROR_SUCCESS)
+	{
+		return false;
+	}
+
+	LONG status = ERROR_SUCCESS;
+	if (enabled)
+	{
+		const wchar_t one[] = L"1";
+		status = RegSetValueExW(key, VeyonFailsafeEmergencyUnlockValue, 0, REG_SZ,
+								reinterpret_cast<const BYTE*>(one), sizeof(one));
+	}
+	else
+	{
+		status = RegDeleteValueW(key, VeyonFailsafeEmergencyUnlockValue);
+		if (status == ERROR_FILE_NOT_FOUND)
+		{
+			status = ERROR_SUCCESS;
+		}
+	}
+	RegCloseKey(key);
+	return status == ERROR_SUCCESS;
+#else
+	return true;
+#endif
+}
+
+
+static bool readEmergencyUnlockFlag()
+{
+	const auto path = passwordTestFilePath();
+	if (path.isEmpty() == false)
+	{
+		QSettings settings(path, QSettings::IniFormat);
+		settings.setFallbacksEnabled(false);
+		return settings.value(EmergencyUnlockKey, 0).toInt() != 0;
+	}
+
+#ifdef Q_OS_WIN
+	HKEY key = nullptr;
+	if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, VeyonFailsafeRuntimeRegistryKey, 0,
+					  KEY_READ | KEY_WOW64_64KEY, &key) != ERROR_SUCCESS)
+	{
+		return false;
+	}
+
+	wchar_t buffer[8]{};
+	DWORD bufferSize = sizeof(buffer);
+	DWORD type = 0;
+	const auto status = RegQueryValueExW(key, VeyonFailsafeEmergencyUnlockValue,
+										 nullptr, &type, reinterpret_cast<LPBYTE>(buffer), &bufferSize);
+	RegCloseKey(key);
+	return status == ERROR_SUCCESS && type == REG_SZ && buffer[0] == L'1';
+#else
+	return false;
+#endif
+}
+
+
+bool FailsafePasswordState::noteEmergencyUnlockSucceeded()
+{
+	return writeEmergencyUnlockFlag(true);
+}
+
+
+bool FailsafePasswordState::clearEmergencyUnlockNote()
+{
+	return writeEmergencyUnlockFlag(false);
+}
+
+
+bool FailsafePasswordState::isEmergencyUnlockPending()
+{
+	return readEmergencyUnlockFlag();
+}
+
+
+bool FailsafePasswordState::consumeEmergencyUnlockSucceeded()
+{
+	if (readEmergencyUnlockFlag() == false)
+	{
+		return false;
+	}
+	writeEmergencyUnlockFlag(false);
+	return true;
+}
+
+
+bool FailsafePasswordState::discardStaleEmergencyUnlock()
+{
+#ifdef Q_OS_WIN
+	if (passwordTestFilePath().isEmpty() == false)
+	{
+		return true;
+	}
+
+	HKEY key = nullptr;
+	if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, VeyonFailsafeRegistryKey, 0,
+					  KEY_WRITE | KEY_WOW64_64KEY, &key) != ERROR_SUCCESS)
+	{
+		return true;
+	}
+	const auto status = RegDeleteValueW(key, VeyonFailsafeEmergencyUnlockValue);
+	RegCloseKey(key);
+	if (status == ERROR_SUCCESS)
+	{
+		vInfo() << "discarded leftover non-volatile emergency unlock flag";
+	}
+	return status == ERROR_SUCCESS || status == ERROR_FILE_NOT_FOUND || status == ERROR_PATH_NOT_FOUND;
+#else
+	return true;
+#endif
 }

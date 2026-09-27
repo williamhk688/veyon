@@ -118,6 +118,34 @@ private slots:
 		QVERIFY(QFile::exists(m_demoFile) == false);
 	}
 
+	void emergencyUnlockFlagIsConsumedOnce()
+	{
+		QVERIFY(FailsafePasswordState::consumeEmergencyUnlockSucceeded() == false);
+		QVERIFY(FailsafePasswordState::isEmergencyUnlockPending() == false);
+		QVERIFY(FailsafePasswordState::noteEmergencyUnlockSucceeded());
+		QVERIFY(FailsafePasswordState::isEmergencyUnlockPending());
+		QVERIFY(FailsafePasswordState::consumeEmergencyUnlockSucceeded());
+		QVERIFY(FailsafePasswordState::isEmergencyUnlockPending() == false);
+		QVERIFY(FailsafePasswordState::consumeEmergencyUnlockSucceeded() == false);
+	}
+
+	void discardStaleDoesNotClearSameBootFlag()
+	{
+		QVERIFY(FailsafePasswordState::noteEmergencyUnlockSucceeded());
+		QVERIFY(FailsafePasswordState::discardStaleEmergencyUnlock());
+		QVERIFY(FailsafePasswordState::isEmergencyUnlockPending());
+		QVERIFY(FailsafePasswordState::clearEmergencyUnlockNote());
+		QVERIFY(FailsafePasswordState::isEmergencyUnlockPending() == false);
+	}
+
+	void teacherReapplyClearsEmergencyFlag()
+	{
+		QVERIFY(FailsafePasswordState::noteEmergencyUnlockSucceeded());
+		QVERIFY(FailsafePasswordState::isEmergencyUnlockPending());
+		QVERIFY(FailsafePasswordState::clearEmergencyUnlockNote());
+		QVERIFY(FailsafePasswordState::isEmergencyUnlockPending() == false);
+	}
+
 private:
 	QString m_passwordFile;
 	QString m_lockFile;

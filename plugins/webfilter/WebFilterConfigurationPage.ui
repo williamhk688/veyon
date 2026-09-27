@@ -22,9 +22,33 @@
       <bool>true</bool>
      </property>
      <property name="text">
-      <string>工具列「網絡管制 (Web filter)」可選封鎖黑名單網站 (Block blacklist sites)、只允許白名單網站 (Allow whitelist sites only) 或恢復網絡 (Restore web)。內建代理站不能刪；可用下面按鈕新增學校自己的代理站。Google 翻譯不會寫死封鎖。Veyon 通訊永遠可通。</string>
+      <string>工具列「Web filter (網絡管制)」可選 Block blacklist sites (封鎖黑名單網站)、Allow whitelist sites only (只允許白名單網站) 或 Restore web (恢復網絡)。內建代理站不能刪；可用下面按鈕新增學校自己的代理站。Google 翻譯不會寫死封鎖。Veyon 通訊永遠可通。</string>
      </property>
     </widget>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="ttlLayout">
+     <item>
+      <widget class="QLabel" name="ttlLabel">
+       <property name="text">
+        <string>Temporary web filter hard TTL (minutes)</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QSpinBox" name="ttlMinutes">
+       <property name="minimum">
+        <number>30</number>
+       </property>
+       <property name="maximum">
+        <number>720</number>
+       </property>
+       <property name="value">
+        <number>180</number>
+       </property>
+      </widget>
+     </item>
+    </layout>
    </item>
    <item>
     <widget class="QGroupBox" name="blockedGroup">

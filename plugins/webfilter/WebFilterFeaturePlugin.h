@@ -16,7 +16,11 @@
 #ifdef Q_OS_WIN
 class WindowsWebFilterIpcServer;
 #endif
+class QTimer;
+class VeyonMasterInterface;
 class VeyonServerInterface;
+class WebFilterSessionStatusDialog;
+class WebFilterSessionWatchdog;
 class WebFilterStatusOverlay;
 
 class WebFilterFeaturePlugin : public QObject, PluginInterface,
@@ -31,7 +35,13 @@ public:
 	{
 		Domains,
 		ExtraProxies,
-		Mode
+		Mode,
+		SessionId,
+		DurationMs,
+		StartTimeMs,
+		ExpiresAtMs,
+		Version,
+		StopReason
 	};
 	Q_ENUM(Argument)
 
@@ -45,7 +55,7 @@ public:
 
 	QVersionNumber version() const override
 	{
-		return QVersionNumber(1, 7);
+		return QVersionNumber(1, 17);
 	}
 
 	QString name() const override
@@ -89,6 +99,8 @@ public:
 
 	void initializeServer(VeyonServerInterface& server) override;
 
+	bool handleFeatureMessageFromWorker(VeyonServerInterface& server, const FeatureMessage& message) override;
+
 	bool isFeatureActive(VeyonServerInterface& server, Feature::Uid featureUid) const override;
 
 	ConfigurationPage* createConfigurationPage() override;
@@ -100,25 +112,48 @@ private:
 		ApplyWhitelist,
 		Restore,
 		ShowStatus,
-		HideStatus
+		HideStatus,
+		FailsafeUnlock
 	};
 
 	void startServiceHelper();
-	Feature::Uid overlayFeatureUid(PersistentWebFilterState::Mode mode) const;
+	Feature::Uid overlayFeatureUid(WebFilterSession::Mode mode) const;
 	void stopOverlayWorker(VeyonServerInterface& server, Feature::Uid featureUid);
-	void showOverlayWorker(VeyonServerInterface& server, PersistentWebFilterState::Mode mode);
+	void showOverlayWorker(VeyonServerInterface& server, WebFilterSession::Mode mode);
 	void hideOverlayWorker(VeyonServerInterface& server);
 	void restoreOverlayWorker();
+	void syncPersistedSession();
+	WebFilterSession sessionFromMessage(const FeatureMessage& message) const;
+	void addSessionArguments(FeatureMessage& message, const WebFilterSession& session) const;
+	bool promptDurationAndStart(VeyonMasterInterface& master,
+								const Feature& feature,
+								const ComputerControlInterfaceList& computerControlInterfaces);
+	void startTeacherSession(const WebFilterSession& session, VeyonMasterInterface& master);
+	void stopTeacherSession(WebFilterSession::StopReason reason);
+	void rebuildFeatureList();
+	void refreshTeacherUi();
+	void showStatusDialog();
+	void onTeacherTimerExpired();
+	void onTeacherTick();
+	qint64 configuredMaxTtlMs() const;
 	QStringList configuredBlockedDomains() const;
 	QStringList configuredAllowedDomains() const;
 	QStringList configuredExtraProxyDomains() const;
 
 	WebFilterConfiguration m_configuration;
+	WebFilterSession m_activeSession;
+	VeyonMasterInterface* m_master = nullptr;
+	WebFilterSessionStatusDialog* m_statusDialog = nullptr;
+	WebFilterSessionWatchdog* m_watchdog = nullptr;
+	QTimer* m_sessionSyncTimer = nullptr;
+	QTimer* m_teacherExpireTimer = nullptr;
+	QTimer* m_teacherTickTimer = nullptr;
 	const Feature m_webFilterFeature;
 	const Feature m_blacklistFeature;
 	const Feature m_whitelistFeature;
 	const Feature m_restoreFeature;
-	const FeatureList m_features;
+	const Feature m_viewStatusFeature;
+	FeatureList m_features;
 	WebFilterStatusOverlay* m_statusOverlay = nullptr;
 	VeyonServerInterface* m_server = nullptr;
 #ifdef Q_OS_WIN

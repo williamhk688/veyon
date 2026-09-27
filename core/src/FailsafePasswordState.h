@@ -67,4 +67,20 @@ public:
 	 * Windows service registry watch re-enables input after a local unlock.
 	 */
 	static bool clearPersistedInputLocks();
+
+	static bool noteEmergencyUnlockSucceeded();
+	static bool isEmergencyUnlockPending();
+	static bool consumeEmergencyUnlockSucceeded();
+	/*!
+	 * Clears the same-boot emergency flag after the teacher applies a new
+	 * lock, demo, or web-filter session so a later service restart cannot
+	 * treat that new restriction as already unlocked.
+	 */
+	static bool clearEmergencyUnlockNote();
+	/*!
+	 * Drops a leftover non-volatile EmergencyUnlock value from older builds.
+	 * Must run before service restore so a previous hotkey cannot wipe a
+	 * new lock or web-filter session across reboot.
+	 */
+	static bool discardStaleEmergencyUnlock();
 };

@@ -53,6 +53,7 @@ static QMutex& monitorMutex()
 #ifdef Q_OS_WIN
 static constexpr auto HotkeyEventName = L"Global\\VeyonFailsafeHotkey";
 static constexpr auto PassthroughEventName = L"Global\\VeyonFailsafePasswordDialogActive";
+static constexpr auto InputReleaseEventName = L"Global\\VeyonFailsafeReleaseInput";
 
 
 static HANDLE createGlobalEvent(const wchar_t* name, bool manualReset)
@@ -84,6 +85,7 @@ FailsafeHotkeyMonitor::FailsafeHotkeyMonitor() :
 #ifdef Q_OS_WIN
 	m_hotkeyEvent = createGlobalEvent(HotkeyEventName, false);
 	m_passthroughEvent = createGlobalEvent(PassthroughEventName, true);
+	m_inputReleaseEvent = createGlobalEvent(InputReleaseEventName, false);
 
 	if (m_hotkeyEvent)
 	{
@@ -137,6 +139,29 @@ void FailsafeHotkeyMonitor::notifyHotkeyPressed()
 		}
 #endif
 	}, Qt::QueuedConnection);
+}
+
+
+
+void FailsafeHotkeyMonitor::notifyInputReleaseRequested()
+{
+#ifdef Q_OS_WIN
+	if (m_inputReleaseEvent)
+	{
+		SetEvent(static_cast<HANDLE>(m_inputReleaseEvent));
+	}
+#endif
+}
+
+
+
+void* FailsafeHotkeyMonitor::inputReleaseEventHandle() const
+{
+#ifdef Q_OS_WIN
+	return m_inputReleaseEvent;
+#else
+	return nullptr;
+#endif
 }
 
 
@@ -198,6 +223,7 @@ bool FailsafeHotkeyMonitor::isUnlockHotkey(const QKeyEvent* event)
 bool FailsafeUnlock::prompt(QWidget* parent)
 {
 	static bool dialogOpen = false;
+	static int failureCount = 0;
 	if (dialogOpen)
 	{
 		return false;
@@ -225,6 +251,10 @@ bool FailsafeUnlock::prompt(QWidget* parent)
 
 	if (FailsafePasswordState::passwordMatches(entered) == false)
 	{
+		++failureCount;
+		vWarning() << "Emergency unlock authentication failed";
+		const auto delayMs = qMin(failureCount * 500, 3000);
+		QThread::msleep(uint(delayMs));
 		QMessageBox::warning(parent,
 							 QCoreApplication::translate("FailsafeUnlock", "Unlock"),
 							 QCoreApplication::translate("FailsafeUnlock", "The password is incorrect."));
@@ -233,9 +263,12 @@ bool FailsafeUnlock::prompt(QWidget* parent)
 		return false;
 	}
 
+	failureCount = 0;
 	FailsafePasswordState::clearPersistedInputLocks();
+	FailsafePasswordState::noteEmergencyUnlockSucceeded();
+	FailsafeHotkeyMonitor::instance().notifyInputReleaseRequested();
 	FailsafeHotkeyMonitor::instance().setPasswordPromptActive(false);
 	dialogOpen = false;
-	vInfo() << "failsafe unlock succeeded";
+	vInfo() << "Emergency unlock successful";
 	return true;
 }

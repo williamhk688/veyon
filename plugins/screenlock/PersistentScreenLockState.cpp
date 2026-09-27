@@ -24,7 +24,10 @@
 
 #include <QFile>
 #include <QSettings>
+#include <QUuid>
 
+#include "ClassroomPersistStore.h"
+#include "FailsafePasswordState.h"
 #include "PersistentScreenLockState.h"
 #include "VeyonCore.h"
 
@@ -147,6 +150,10 @@ static bool writeToRegistry(const Feature::Uid& featureUid)
 								DWORD((uidString.size() + 1) * sizeof(wchar_t)));
 	}
 
+	if (status == ERROR_SUCCESS)
+	{
+		RegFlushKey(key);
+	}
 	RegCloseKey(key);
 
 	if (status != ERROR_SUCCESS)
@@ -169,7 +176,17 @@ Feature::Uid PersistentScreenLockState::readLockedFeatureUid()
 	}
 
 #ifdef Q_OS_WIN
-	return readFromRegistry();
+	auto uid = readFromRegistry();
+	if (uid.isNull() == false)
+	{
+		return uid;
+	}
+	uid = Feature::Uid{ClassroomPersistStore::readValue(ClassroomPersistStore::screenLockName())};
+	if (uid.isNull() == false)
+	{
+		writeToRegistry(uid);
+	}
+	return uid;
 #else
 	return {};
 #endif
@@ -185,6 +202,8 @@ bool PersistentScreenLockState::writeLockedFeatureUid(const Feature::Uid& featur
 	}
 
 #ifdef Q_OS_WIN
+	const auto fileText = featureUid.isNull() ? QString() : featureUid.toString(QUuid::WithoutBraces);
+	ClassroomPersistStore::writeValue(ClassroomPersistStore::screenLockName(), fileText);
 	return writeToRegistry(featureUid);
 #else
 	Q_UNUSED(featureUid)
@@ -220,6 +239,7 @@ bool PersistentScreenLockState::setLocked(const Feature::Uid& featureUid)
 		return false;
 	}
 
+	FailsafePasswordState::clearEmergencyUnlockNote();
 	vInfo() << "persisted screen lock" << featureUid;
 	return true;
 }

@@ -99,7 +99,7 @@ bool TeacherSelfRescue::confirmPrivacyWarning(QWidget* parent)
 	box.setObjectName(QStringLiteral("teacherSelfRescueWarning"));
 	box.setIcon(QMessageBox::Warning);
 	box.setWindowTitle(QCoreApplication::translate("TeacherSelfRescue",
-												   "教師自救手冊 (Teacher Self-Rescue)"));
+												   "Teacher Self-Rescue (教師自救手冊)"));
 	box.setText(QCoreApplication::translate("TeacherSelfRescue",
 											"This handbook contains unlock steps for locked student PCs."));
 	box.setInformativeText(QCoreApplication::translate(
@@ -201,7 +201,7 @@ void TeacherSelfRescue::showHandbook(QWidget* parent)
 	QDialog dialog(parent);
 	dialog.setObjectName(QStringLiteral("teacherSelfRescueHandbook"));
 	dialog.setWindowTitle(QCoreApplication::translate("TeacherSelfRescue",
-													  "教師自救手冊 (Teacher Self-Rescue)"));
+													  "Teacher Self-Rescue (教師自救手冊)"));
 	dialog.setWindowModality(Qt::ApplicationModal);
 	dialog.resize(760, 560);
 
@@ -216,9 +216,9 @@ void TeacherSelfRescue::showHandbook(QWidget* parent)
 	auto* tabs = new QTabWidget(&dialog);
 	tabs->setObjectName(QStringLiteral("teacherSelfRescueSteps"));
 	const QStringList titles{
-		QCoreApplication::translate("TeacherSelfRescue", "步驟 1　簡單排查"),
-		QCoreApplication::translate("TeacherSelfRescue", "步驟 2　熱鍵解鎖"),
-		QCoreApplication::translate("TeacherSelfRescue", "步驟 3　安全模式")
+		QCoreApplication::translate("TeacherSelfRescue", "Step 1 Simple checks (步驟 1　簡單排查)"),
+		QCoreApplication::translate("TeacherSelfRescue", "Step 2 Hotkey unlock (步驟 2　熱鍵解鎖)"),
+		QCoreApplication::translate("TeacherSelfRescue", "Step 3 Safe Mode (步驟 3　安全模式)")
 	};
 	for (int step = 1; step <= 3; ++step)
 	{
@@ -253,13 +253,14 @@ QString TeacherSelfRescue::handbookHtml(int step)
 	case 1:
 		return QCoreApplication::translate(
 			"TeacherSelfRescue",
-			"<h3>步驟 1 — 先做簡單排查</h3>"
+			"<h3>Step 1 — Simple checks first (步驟 1 — 先做簡單排查)</h3>"
 			"<p>學生電腦變磚時，多數情況仍可用老師電腦解開，不必進安全模式。</p>"
 			"<ol>"
 			"<li><b>用 CYC Veyon 解鎖：</b>選取該學生電腦，按 Unlock（解鎖）。"
-			"若正在演示，先按 Stop Demo（停止演示）。這是正規做法。</li>"
+			"若正在演示，先按 Stop Demo（停止演示）。"
+			"若是網絡管制，按 Web filter (網絡管制) → Restore web (恢復網絡)。這是正規做法。</li>"
 			"<li><b>網絡斷了？</b>拔網線<b>不能</b>自行解鎖。鎖定旗標記在學生本機。"
-			"請把網線插回（或接上 Wi-Fi），等 Master 再連上後，再按一次 Unlock / Stop Demo。</li>"
+			"請把網線插回（或接上 Wi-Fi），等 Master 再連上後，再按一次 Unlock / Stop Demo / Restore web。</li>"
 			"<li><b>老師 Master 能連上、學生畫面仍鎖：</b>再按一次 Unlock。"
 			"關機後仍鎖是設計行為，要等 Master 解鎖才會清掉登錄檔旗標。</li>"
 			"<li>只有 Master 連不到、鍵盤滑鼠完全沒反應（連 Ctrl+Alt+Delete 也沒有）時，"
@@ -268,8 +269,8 @@ QString TeacherSelfRescue::handbookHtml(int step)
 	case 2:
 		return QCoreApplication::translate(
 			"TeacherSelfRescue",
-			"<h3>步驟 2 — 在被鎖的電腦上用熱鍵解鎖</h3>"
-			"<p>適用：學生機已鎖、鍵盤被 Interception 攔截，但你人在該機前面。</p>"
+			"<h3>Step 2 — Hotkey unlock on the locked PC (步驟 2 — 在被鎖的電腦上用熱鍵解鎖)</h3>"
+			"<p>適用：學生機已鎖、鍵盤被 Interception 攔截，或黑白名單網絡管制仍開著，但你人在該機前面。</p>"
 			"<ol>"
 			"<li>在<b>被鎖的那一台</b>按下：<b>%1</b></li>"
 			"<li>會出現密碼框。請輸入熱鍵解鎖密碼。</li>"
@@ -281,17 +282,21 @@ QString TeacherSelfRescue::handbookHtml(int step)
 			"最新值是本機 Master 上次成功寫入至少一台學生機後記住的密碼；"
 			"從未成功改過時，兩行會相同。</p>"
 			"<p>若上次只改到部分電腦，失敗的那幾台可能仍是預設密碼。"
-			"可用「修改解鎖密碼」一次寫入全部（答安全問題後無需舊密碼）。</p>"
+			"可用 Emergency Unlock & Recover (緊急解鎖與自救) → "
+			"Change Failsafe Password (修改解鎖密碼) 一次寫入全部（答安全問題後無需舊密碼）。</p>"
 			"<p>密碼框開啟時只能輸入英數字、符號、Enter、Backspace；"
 			"Ctrl、Alt、Win、Esc 仍會被攔截，無法開工作管理員。</p>"
 			"<p>成功後會清掉本機的鎖定／演示旗標，鍵盤滑鼠應立即恢復。"
-			"回到老師 Master，若該學生仍顯示鎖定，再按一次 Unlock 對齊狀態。</p>"
+			"同一熱鍵也會解除本機的 Web filter (網絡管制) 黑名單或白名單。"
+			"同一堂課的同一個 session 不會再被老師機重覆套用；"
+			"老師若<b>重新開始一個新的</b>黑白名單 session，這台電腦仍會再鎖。</p>"
+			"<p>回到老師 Master，若該學生仍顯示鎖定，再按一次 Unlock 對齊狀態。</p>"
 			"<p>熱鍵無效（驅動未載入、或該機沒裝 Interception）時，請改用步驟 3。</p>")
 			.arg(hotkeyHtml, defaultPassword, latestPassword);
 	case 3:
 		return QCoreApplication::translate(
 			"TeacherSelfRescue",
-			"<h3>步驟 3 — Windows 安全模式／修復環境</h3>"
+			"<h3>Step 3 — Windows Safe Mode / Recovery (步驟 3 — Windows 安全模式／修復環境)</h3>"
 			"<p>適用：熱鍵無效、鍵盤完全沒反應。目標有兩件事："
 			"先讓鍵盤能用，再刪掉本機記住的鎖定旗標。"
 			"只停 Veyon 服務但不刪登錄檔的話，下次正常開機還會再鎖。</p>"
@@ -313,10 +318,15 @@ QString TeacherSelfRescue::handbookHtml(int step)
 			"<p>系統管理員命令提示字元可複製：</p>"
 			"<pre>sc stop VeyonService\n"
 			"reg delete \"HKLM\\SOFTWARE\\Veyon Solutions\\VeyonScreenLock\" /f\n"
-			"reg delete \"HKLM\\SOFTWARE\\Veyon Solutions\\VeyonDemo\" /f</pre>"
+			"reg delete \"HKLM\\SOFTWARE\\Veyon Solutions\\VeyonDemo\" /f\n"
+			"reg delete \"HKLM\\SOFTWARE\\Veyon Solutions\\VeyonWebFilter\" /f\n"
+			"reg delete \"HKLM\\SOFTWARE\\Veyon Solutions\\VeyonFailsafe\" /v EmergencyUnlock /f\n"
+			"reg delete \"HKLM\\SOFTWARE\\Veyon Solutions\\VeyonFailsafeRuntime\" /f\n"
+			"rmdir /s /q \"%ProgramData%\\Veyon\\classroom-persist\"</pre>"
 			"<p>圖形介面：services.msc 停止「Veyon Service」；regedit 刪除 "
 			"<code>HKLM\\SOFTWARE\\Veyon Solutions</code> 底下的 "
-			"<b>VeyonScreenLock</b> 與 <b>VeyonDemo</b> 資料夾。"
+			"<b>VeyonScreenLock</b>、<b>VeyonDemo</b> 與 <b>VeyonWebFilter</b> 資料夾，"
+			"並刪除 <code>%ProgramData%\\Veyon\\classroom-persist</code>。"
 			"不要刪 <code>Veyon</code> 資料夾（教室設定在裡面）。走 64 位元路徑，不要進 Wow6432Node。</p>"
 			"<p>然後開始功能表 → 重新啟動。正常開機後鍵盤應恢復。到 Master 再按一次 Unlock 對齊狀態。</p>"
 			"<p><b>進不了安全模式時：</b>修復環境 → 命令提示字元。先用 "
@@ -325,7 +335,11 @@ QString TeacherSelfRescue::handbookHtml(int step)
 			"<pre>reg load HKLM\\VeyonRec C:\\Windows\\System32\\config\\SOFTWARE\n"
 			"reg delete \"HKLM\\VeyonRec\\Veyon Solutions\\VeyonScreenLock\" /f\n"
 			"reg delete \"HKLM\\VeyonRec\\Veyon Solutions\\VeyonDemo\" /f\n"
-			"reg unload HKLM\\VeyonRec</pre>"
+			"reg delete \"HKLM\\VeyonRec\\Veyon Solutions\\VeyonWebFilter\" /f\n"
+			"reg delete \"HKLM\\VeyonRec\\Veyon Solutions\\VeyonFailsafe\" /v EmergencyUnlock /f\n"
+			"reg delete \"HKLM\\VeyonRec\\Veyon Solutions\\VeyonFailsafeRuntime\" /f\n"
+			"reg unload HKLM\\VeyonRec\n"
+			"rmdir /s /q C:\\ProgramData\\Veyon\\classroom-persist</pre>"
 			"<p><code>unload</code> 一定要做。然後 <code>exit</code>，選繼續開機。</p>"
 			"<p><b>請不要：</b>把這份說明貼在課室、教學生進安全模式、格式化硬碟、"
 			"刪除整個 Veyon 機碼、或在老師電腦清登錄檔來救學生"

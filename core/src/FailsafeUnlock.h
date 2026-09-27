@@ -48,6 +48,8 @@ public:
 	void notifyHotkeyPressed();
 	void setPasswordPromptActive(bool enabled);
 	bool passwordPromptActive() const;
+	void notifyInputReleaseRequested();
+	void* inputReleaseEventHandle() const;
 
 	static bool isUnlockHotkey(const QKeyEvent* event);
 
@@ -60,6 +62,7 @@ private:
 #ifdef Q_OS_WIN
 	void* m_hotkeyEvent{nullptr};
 	void* m_passthroughEvent{nullptr};
+	void* m_inputReleaseEvent{nullptr};
 	class QWinEventNotifier* m_hotkeyNotifier{nullptr};
 #endif
 };

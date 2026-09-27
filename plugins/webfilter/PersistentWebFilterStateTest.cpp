@@ -10,6 +10,7 @@
 #include <QFile>
 
 #include "PersistentWebFilterState.h"
+#include "WebFilterSessionPolicy.h"
 
 class PersistentWebFilterStateTest : public QObject
 {
@@ -60,6 +61,55 @@ private slots:
 	{
 		QVERIFY(PersistentWebFilterState::setPolicySnapshot(QStringLiteral("{\"chromeBlock\":{}}")));
 		QCOMPARE(PersistentWebFilterState::policySnapshot(), QStringLiteral("{\"chromeBlock\":{}}"));
+	}
+
+	void sessionRoundTripAndReplacement()
+	{
+		const auto first = WebFilterSessionPolicy::create(
+					WebFilterSession::Mode::Blacklist, 30 * 60 * 1000, 1'000'000,
+					WebFilterSessionPolicy::DefaultMaxTtlMs, {QStringLiteral("8ballpool.com")});
+		QVERIFY(PersistentWebFilterState::saveSession(first));
+		QCOMPARE(PersistentWebFilterState::session().sessionId, first.sessionId);
+		QCOMPARE(PersistentWebFilterState::mode(), WebFilterSession::Mode::Blacklist);
+
+		const auto second = WebFilterSessionPolicy::create(
+					WebFilterSession::Mode::Whitelist, 20 * 60 * 1000, 1'100'000,
+					WebFilterSessionPolicy::DefaultMaxTtlMs, {QStringLiteral("classroom.google.com")});
+		QVERIFY(PersistentWebFilterState::saveSession(second));
+		QCOMPARE(PersistentWebFilterState::session().sessionId, second.sessionId);
+		QCOMPARE(PersistentWebFilterState::mode(), WebFilterSession::Mode::Whitelist);
+		QVERIFY(PersistentWebFilterState::clear());
+		QVERIFY(PersistentWebFilterState::session().isActive() == false);
+	}
+
+	void checkpointDoesNotClearMode()
+	{
+		auto session = WebFilterSessionPolicy::create(
+					WebFilterSession::Mode::Blacklist, 30 * 60 * 1000, 1'000'000);
+		QVERIFY(PersistentWebFilterState::saveSession(session));
+		QVERIFY(PersistentWebFilterState::updateCheckpoint(15 * 1000, 1'015'000));
+		QCOMPARE(PersistentWebFilterState::session().checkpointElapsedMs, 15 * 1000);
+		QCOMPARE(PersistentWebFilterState::session().bootId, session.bootId);
+		QCOMPARE(PersistentWebFilterState::mode(), WebFilterSession::Mode::Blacklist);
+	}
+
+	void emergencyUnlockBlocksSameSessionOnly()
+	{
+		const auto first = WebFilterSessionPolicy::create(
+					WebFilterSession::Mode::Blacklist, 30 * 60 * 1000, 1'000'000);
+		const auto second = WebFilterSessionPolicy::create(
+					WebFilterSession::Mode::Whitelist, 20 * 60 * 1000, 1'100'000);
+		QVERIFY(PersistentWebFilterState::noteEmergencyUnlocked(first.sessionId));
+		QVERIFY(PersistentWebFilterState::isEmergencyUnlocked(first.sessionId));
+		QVERIFY(PersistentWebFilterState::shouldIgnoreApply(first.sessionId));
+		QVERIFY(PersistentWebFilterState::shouldIgnoreApply(second.sessionId) == false);
+		QVERIFY(PersistentWebFilterState::shouldIgnoreApply({}) == false);
+		QVERIFY(PersistentWebFilterState::clearEmergencyUnlocked());
+		QVERIFY(PersistentWebFilterState::shouldIgnoreApply(first.sessionId) == false);
+		QVERIFY(PersistentWebFilterState::noteEmergencyUnlocked(first.sessionId));
+		QVERIFY(PersistentWebFilterState::clear());
+		QVERIFY(PersistentWebFilterState::shouldIgnoreApply(first.sessionId) == false);
+		QVERIFY(PersistentWebFilterState::emergencyUnlockedSession().isNull());
 	}
 
 private:

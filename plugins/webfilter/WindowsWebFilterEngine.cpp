@@ -11,6 +11,7 @@
 #include <wininet.h>
 #include <shlobj.h>
 
+#include <QDateTime>
 #include <QDir>
 #include <QFile>
 #include <QJsonArray>
@@ -18,12 +19,16 @@
 #include <QJsonObject>
 #include <QThread>
 
+#include <algorithm>
+
 #include "Filesystem.h"
 #include "PersistentWebFilterState.h"
 #include "VeyonConfiguration.h"
 #include "VeyonCore.h"
+#include "WebFilterConfiguration.h"
 #include "WebFilterEngine.h"
 #include "WebFilterLists.h"
+#include "WebFilterSessionPolicy.h"
 
 namespace
 {
@@ -695,9 +700,66 @@ bool restoreAll(bool restartBrowsers)
 
 }
 
-bool WebFilterEngine::applyBlacklist(const QStringList& schoolBlocked, const QStringList& extraProxies,
-									bool restartBrowsers)
+static WebFilterSession persistableSession(WebFilterSession::Mode mode,
+										  const QStringList& domains,
+										  const WebFilterSession& incoming)
 {
+	auto session = incoming;
+	if (session.isActive() == false)
+	{
+		session = WebFilterSessionPolicy::create(mode,
+												 WebFilterEngine::configuredMaxTtlMs(),
+												 QDateTime::currentMSecsSinceEpoch(),
+												 WebFilterEngine::configuredMaxTtlMs(),
+												 domains);
+	}
+	session.mode = mode;
+	session.domains = domains;
+
+	const auto local = PersistentWebFilterState::session();
+	if (local.isActive() && local.sessionId == session.sessionId)
+	{
+		session.checkpointElapsedMs = std::max(session.checkpointElapsedMs, local.checkpointElapsedMs);
+		if (session.checkpointWallMs <= 0)
+		{
+			session.checkpointWallMs = local.checkpointWallMs;
+		}
+		if (session.bootId.isEmpty())
+		{
+			session.bootId = local.bootId;
+		}
+	}
+
+	if (session.checkpointWallMs <= 0)
+	{
+		session.checkpointWallMs = session.startTimeMs;
+	}
+	session.checkpointTickMs = WebFilterSessionPolicy::currentUptimeMs();
+	session.bootId = WebFilterSessionPolicy::currentBootId();
+	return session;
+}
+
+qint64 WebFilterEngine::configuredMaxTtlMs()
+{
+	WebFilterConfiguration configuration(&VeyonCore::config());
+	const auto minutes = configuration.temporaryWebFilterMaxTtlMinutes();
+	if (minutes <= 0)
+	{
+		return WebFilterSessionPolicy::DefaultMaxTtlMs;
+	}
+	return qint64(minutes) * 60 * 1000;
+}
+
+bool WebFilterEngine::applyBlacklist(const QStringList& schoolBlocked, const QStringList& extraProxies,
+									bool restartBrowsers, const WebFilterSession& incomingSession)
+{
+	if (PersistentWebFilterState::shouldIgnoreApply(incomingSession.sessionId))
+	{
+		vInfo() << "ignoring teacher apply for emergency-unlocked session"
+				<< incomingSession.sessionId.toString(QUuid::WithoutBraces);
+		return true;
+	}
+	PersistentWebFilterState::clearEmergencyUnlocked();
 	const auto domains = WebFilterLists::effectiveBlacklist(schoolBlocked, extraProxies);
 	if (ensurePolicySnapshot() == false)
 	{
@@ -709,18 +771,29 @@ bool WebFilterEngine::applyBlacklist(const QStringList& schoolBlocked, const QSt
 	{
 		return false;
 	}
-	PersistentWebFilterState::setBlacklist(domains);
+	const auto session = persistableSession(WebFilterSession::Mode::Blacklist, domains, incomingSession);
+	PersistentWebFilterState::saveSession(session);
 	if (restartBrowsers)
 	{
 		reloadBrowsers();
 	}
-	vInfo() << "applied web blacklist" << domains.size() << "domains";
+	vInfo() << "Web filter session started"
+			<< "session=" << session.sessionId.toString(QUuid::WithoutBraces)
+			<< "mode=" << WebFilterSessionPolicy::modeName(session.mode)
+			<< "duration=" << session.durationMs;
 	return true;
 }
 
 bool WebFilterEngine::applyWhitelist(const QStringList& schoolAllowed, const QStringList& extraProxies,
-									bool restartBrowsers)
+									bool restartBrowsers, const WebFilterSession& incomingSession)
 {
+	if (PersistentWebFilterState::shouldIgnoreApply(incomingSession.sessionId))
+	{
+		vInfo() << "ignoring teacher apply for emergency-unlocked session"
+				<< incomingSession.sessionId.toString(QUuid::WithoutBraces);
+		return true;
+	}
+	PersistentWebFilterState::clearEmergencyUnlocked();
 	const auto allowed = WebFilterLists::effectiveAllowlist(schoolAllowed, extraProxies);
 	if (ensurePolicySnapshot() == false)
 	{
@@ -735,12 +808,16 @@ bool WebFilterEngine::applyWhitelist(const QStringList& schoolAllowed, const QSt
 	{
 		return false;
 	}
-	PersistentWebFilterState::setWhitelist(allowed);
+	const auto session = persistableSession(WebFilterSession::Mode::Whitelist, allowed, incomingSession);
+	PersistentWebFilterState::saveSession(session);
 	if (restartBrowsers)
 	{
 		reloadBrowsers();
 	}
-	vInfo() << "applied web whitelist" << allowed.size() << "domains";
+	vInfo() << "Web filter session started"
+			<< "session=" << session.sessionId.toString(QUuid::WithoutBraces)
+			<< "mode=" << WebFilterSessionPolicy::modeName(session.mode)
+			<< "duration=" << session.durationMs;
 	return true;
 }
 
@@ -750,23 +827,153 @@ bool WebFilterEngine::restore(bool restartBrowsers)
 	return restoreAll(restartBrowsers);
 }
 
+bool WebFilterEngine::stopSession(const QUuid& sessionId,
+								  WebFilterSession::StopReason reason,
+								  bool restartBrowsers)
+{
+	const auto current = PersistentWebFilterState::session();
+	if (WebFilterSessionPolicy::shouldApplyUnlock(sessionId, current.sessionId) == false)
+	{
+		vInfo() << "Stale unlock ignored"
+				<< "incomingSession=" << sessionId.toString(QUuid::WithoutBraces)
+				<< "currentSession=" << current.sessionId.toString(QUuid::WithoutBraces);
+		return true;
+	}
+
+	if (current.isActive() == false &&
+		PersistentWebFilterState::mode() == PersistentWebFilterState::Mode::Off &&
+		PersistentWebFilterState::policySnapshot().isEmpty())
+	{
+		vInfo() << "Restore already inactive session"
+				<< "session=" << sessionId.toString(QUuid::WithoutBraces)
+				<< "reason=" << WebFilterSessionPolicy::reasonName(reason);
+		const auto unlockedId = current.sessionId.isNull() ? sessionId : current.sessionId;
+		const auto existingUnlocked = PersistentWebFilterState::emergencyUnlockedSession();
+		const auto restored = restore(restartBrowsers);
+		if (reason == WebFilterSession::StopReason::EmergencyUnlock)
+		{
+			const auto keep = unlockedId.isNull() == false ? unlockedId : existingUnlocked;
+			if (keep.isNull() == false)
+			{
+				PersistentWebFilterState::noteEmergencyUnlocked(keep);
+			}
+		}
+		return restored;
+	}
+
+	if (reason == WebFilterSession::StopReason::HardTTLExpired)
+	{
+		vWarning() << "Hard TTL exceeded; restoring web"
+				   << "session=" << current.sessionId.toString(QUuid::WithoutBraces);
+	}
+	else if (reason == WebFilterSession::StopReason::ClientTimerExpired)
+	{
+		vInfo() << "Web filter expired locally"
+				<< "session=" << current.sessionId.toString(QUuid::WithoutBraces);
+	}
+	else if (reason == WebFilterSession::StopReason::TeacherManual)
+	{
+		vInfo() << "Teacher restore received"
+				<< "session=" << current.sessionId.toString(QUuid::WithoutBraces);
+	}
+	else if (reason == WebFilterSession::StopReason::EmergencyUnlock)
+	{
+		vInfo() << "Emergency unlock successful"
+				<< "session=" << current.sessionId.toString(QUuid::WithoutBraces);
+	}
+	else
+	{
+		vInfo() << "stopping web filter session"
+				<< "session=" << current.sessionId.toString(QUuid::WithoutBraces)
+				<< "reason=" << WebFilterSessionPolicy::reasonName(reason);
+	}
+
+	const auto unlockedId = current.sessionId.isNull() ? sessionId : current.sessionId;
+	const auto restored = restore(restartBrowsers);
+	if (reason == WebFilterSession::StopReason::EmergencyUnlock && unlockedId.isNull() == false)
+	{
+		PersistentWebFilterState::noteEmergencyUnlocked(unlockedId);
+	}
+	return restored;
+}
+
 bool WebFilterEngine::reconcileOnServiceStart()
 {
 	ensureClassroomFirewall();
 	clearSystemPac();
 
-	const auto mode = PersistentWebFilterState::mode();
-	if (mode == PersistentWebFilterState::Mode::Blacklist)
+	const auto loaded = PersistentWebFilterState::session();
+	if (PersistentWebFilterState::shouldIgnoreApply(loaded.sessionId))
 	{
-		const auto domains = PersistentWebFilterState::domains();
-		vInfo() << "reapplying persisted web blacklist";
-		return applyBlacklist(domains, {}, false);
+		vInfo() << "not reapplying emergency-unlocked session after reboot"
+				<< loaded.sessionId.toString(QUuid::WithoutBraces);
+		return restore(false) && PersistentWebFilterState::noteEmergencyUnlocked(loaded.sessionId);
 	}
-
-	if (mode == PersistentWebFilterState::Mode::Whitelist)
+	const auto nowWall = QDateTime::currentMSecsSinceEpoch();
+	const auto nowTick = WebFilterSessionPolicy::currentUptimeMs();
+	if (loaded.isActive() && WebFilterSessionPolicy::isSameBoot(loaded, nowTick))
 	{
-		vInfo() << "dropping web whitelist after service start";
-		return restore(false);
+		auto resumed = loaded;
+		resumed.checkpointElapsedMs = WebFilterSessionPolicy::effectiveElapsedMs(
+					loaded, nowWall, nowTick, configuredMaxTtlMs());
+		resumed.checkpointTickMs = nowTick;
+		resumed.checkpointWallMs = nowWall;
+		resumed.bootId = WebFilterSessionPolicy::currentBootId();
+		const auto live = WebFilterSessionPolicy::liveAction(
+					resumed, resumed.checkpointElapsedMs, configuredMaxTtlMs());
+		if (live != WebFilterSessionPolicy::LiveAction::Continue)
+		{
+			return stopSession(resumed.sessionId, WebFilterSession::StopReason::ClientTimerExpired, false);
+		}
+		vInfo() << "Web filter still active on same boot";
+		if (resumed.mode == WebFilterSession::Mode::Blacklist)
+		{
+			return applyBlacklist(resumed.domains, {}, false, resumed);
+		}
+		return applyWhitelist(resumed.domains, {}, false, resumed);
+	}
+	QString reconstructReason;
+	const auto session = WebFilterSessionPolicy::recoverForReboot(
+				loaded, QDateTime::currentMSecsSinceEpoch(), configuredMaxTtlMs(), &reconstructReason);
+	if (reconstructReason.contains(QLatin1String("reconstructed")))
+	{
+		vWarning() << "persisted web-filter session JSON missing; reconstructing from mode"
+				   << reconstructReason;
+	}
+	if (session.isActive() || PersistentWebFilterState::mode() != PersistentWebFilterState::Mode::Off)
+	{
+		QString reason;
+		const auto action = WebFilterSessionPolicy::recoveryAction(
+					session, QDateTime::currentMSecsSinceEpoch(), configuredMaxTtlMs(), &reason);
+		if (action == WebFilterSessionPolicy::RecoveryAction::FailOpen)
+		{
+			vWarning() << "Malformed persisted web filter state; clearing" << reason;
+			return restore(false);
+		}
+		if (action == WebFilterSessionPolicy::RecoveryAction::Expire)
+		{
+			vInfo() << "Web filter expired on recovery"
+					<< "session=" << session.sessionId.toString(QUuid::WithoutBraces)
+					<< reason;
+			return stopSession(session.sessionId, WebFilterSession::StopReason::RecoveryExpired, false);
+		}
+
+		const auto elapsed = WebFilterSessionPolicy::effectiveElapsedMs(
+					session, QDateTime::currentMSecsSinceEpoch(),
+					WebFilterSessionPolicy::currentUptimeMs(), configuredMaxTtlMs());
+		auto resumed = session;
+		resumed.checkpointElapsedMs = elapsed;
+		resumed.checkpointWallMs = QDateTime::currentMSecsSinceEpoch();
+		resumed.checkpointTickMs = WebFilterSessionPolicy::currentUptimeMs();
+		resumed.bootId = WebFilterSessionPolicy::currentBootId();
+		vInfo() << "Web filter restored after reboot"
+				<< "session=" << resumed.sessionId.toString(QUuid::WithoutBraces)
+				<< "mode=" << WebFilterSessionPolicy::modeName(resumed.mode);
+		if (resumed.mode == WebFilterSession::Mode::Blacklist)
+		{
+			return applyBlacklist(resumed.domains, {}, false, resumed);
+		}
+		return applyWhitelist(resumed.domains, {}, false, resumed);
 	}
 
 	if (PersistentWebFilterState::policySnapshot().isEmpty() == false ||

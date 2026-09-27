@@ -56,7 +56,7 @@ public:
 
 	QVersionNumber version() const override
 	{
-		return QVersionNumber(1, 0);
+		return QVersionNumber(1, 1);
 	}
 
 	QString name() const override
@@ -117,6 +117,7 @@ private:
 	void waitForAcknowledgements(QWidget* parent, const QUuid& requestId);
 	void showResults(QWidget* parent, const PendingRequest& request) const;
 
+	const Feature m_parentFeature;
 	const Feature m_changePasswordFeature;
 	const Feature m_selfRescueFeature;
 	const FeatureList m_features;
