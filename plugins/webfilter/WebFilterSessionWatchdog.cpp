@@ -96,13 +96,24 @@ bool WebFilterSessionWatchdog::poll()
 	track(session);
 
 	const auto maxTtlMs = WebFilterEngine::configuredMaxTtlMs();
+	const auto nowWall = QDateTime::currentMSecsSinceEpoch();
 	if (WebFilterSessionPolicy::isSameBoot(session) == false)
 	{
-		if (WebFilterSessionPolicy::recoveryAction(session, QDateTime::currentMSecsSinceEpoch(), maxTtlMs)
+		if (WebFilterSessionPolicy::recoveryAction(session, nowWall, maxTtlMs)
 			== WebFilterSessionPolicy::RecoveryAction::Expire)
 		{
 			stopCurrent(WebFilterSession::StopReason::RecoveryExpired);
 			return true;
+		}
+
+		const auto recovered = WebFilterSessionPolicy::recoveredElapsedMs(session, nowWall, maxTtlMs);
+		const auto current = m_baseElapsedMs + m_elapsed.elapsed();
+		if (recovered > current)
+		{
+			m_baseElapsedMs = recovered;
+			m_elapsed.restart();
+			PersistentWebFilterState::updateCheckpoint(recovered, nowWall);
+			m_lastCheckpointMs = recovered;
 		}
 	}
 

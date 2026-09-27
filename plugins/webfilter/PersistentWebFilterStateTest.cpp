@@ -89,6 +89,7 @@ private slots:
 		QVERIFY(PersistentWebFilterState::saveSession(session));
 		QVERIFY(PersistentWebFilterState::updateCheckpoint(15 * 1000, 1'015'000));
 		QCOMPARE(PersistentWebFilterState::session().checkpointElapsedMs, 15 * 1000);
+		QCOMPARE(PersistentWebFilterState::session().bootId, session.bootId);
 		QCOMPARE(PersistentWebFilterState::mode(), WebFilterSession::Mode::Blacklist);
 	}
 

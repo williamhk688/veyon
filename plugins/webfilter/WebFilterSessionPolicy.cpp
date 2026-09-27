@@ -12,6 +12,8 @@
 #include <windows.h>
 #endif
 
+#include <QUuid>
+
 #include "WebFilterSessionPolicy.h"
 
 qint64 WebFilterSessionPolicy::clampDurationMs(qint64 requestedMs, qint64 maxTtlMs)
@@ -51,6 +53,7 @@ WebFilterSession WebFilterSessionPolicy::create(WebFilterSession::Mode mode,
 	session.checkpointElapsedMs = 0;
 	session.checkpointWallMs = startWallMs;
 	session.checkpointTickMs = currentUptimeMs();
+	session.bootId = currentBootId();
 	return session;
 }
 
@@ -165,6 +168,26 @@ qint64 WebFilterSessionPolicy::recoveredElapsedMs(const WebFilterSession& sessio
 	return std::max<qint64>(0, session.checkpointElapsedMs) + wallDelta;
 }
 
+qint64 WebFilterSessionPolicy::effectiveElapsedMs(const WebFilterSession& session,
+												  qint64 nowWallMs,
+												  qint64 nowTickMs,
+												  qint64 maxTtlMs,
+												  const QString& nowBootId)
+{
+	if (isSameBoot(session, nowTickMs, nowBootId))
+	{
+		if (session.checkpointTickMs <= 0)
+		{
+			return std::max<qint64>(0, session.checkpointElapsedMs);
+		}
+		const auto nowTick = nowTickMs >= 0 ? nowTickMs : currentUptimeMs();
+		return std::max<qint64>(0, session.checkpointElapsedMs) +
+				std::max<qint64>(0, nowTick - session.checkpointTickMs);
+	}
+
+	return recoveredElapsedMs(session, nowWallMs, maxTtlMs);
+}
+
 qint64 WebFilterSessionPolicy::currentUptimeMs()
 {
 #ifdef _WIN32
@@ -174,8 +197,110 @@ qint64 WebFilterSessionPolicy::currentUptimeMs()
 #endif
 }
 
-bool WebFilterSessionPolicy::isSameBoot(const WebFilterSession& session, qint64 nowTickMs)
+#ifdef _WIN32
+static constexpr wchar_t WebFilterRuntimeKey[] =
+	L"SOFTWARE\\Veyon Solutions\\VeyonWebFilterRuntime";
+static constexpr wchar_t BootIdValue[] = L"BootId";
+
+static QString readVolatileBootId()
 {
+	HKEY key = nullptr;
+	if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, WebFilterRuntimeKey, 0,
+					  KEY_READ | KEY_WOW64_64KEY, &key) != ERROR_SUCCESS)
+	{
+		return {};
+	}
+
+	DWORD type = 0;
+	DWORD bufferSize = 0;
+	if (RegQueryValueExW(key, BootIdValue, nullptr, &type, nullptr, &bufferSize) != ERROR_SUCCESS ||
+		type != REG_SZ || bufferSize < sizeof(wchar_t))
+	{
+		RegCloseKey(key);
+		return {};
+	}
+
+	QByteArray buffer(int(bufferSize), 0);
+	if (RegQueryValueExW(key, BootIdValue, nullptr, &type,
+						 reinterpret_cast<LPBYTE>(buffer.data()), &bufferSize) != ERROR_SUCCESS)
+	{
+		RegCloseKey(key);
+		return {};
+	}
+	RegCloseKey(key);
+
+	auto text = QString::fromWCharArray(reinterpret_cast<const wchar_t*>(buffer.constData()),
+										int(bufferSize / sizeof(wchar_t)));
+	if (text.endsWith(QLatin1Char('\0')))
+	{
+		text.chop(1);
+	}
+	return text;
+}
+
+static bool writeVolatileBootId(const QString& text)
+{
+	HKEY key = nullptr;
+	DWORD disposition = 0;
+	if (RegCreateKeyExW(HKEY_LOCAL_MACHINE, WebFilterRuntimeKey, 0, nullptr,
+						REG_OPTION_VOLATILE, KEY_WRITE | KEY_WOW64_64KEY,
+						nullptr, &key, &disposition) != ERROR_SUCCESS)
+	{
+		return false;
+	}
+
+	const auto wide = text.toStdWString();
+	const auto status = RegSetValueExW(key, BootIdValue, 0, REG_SZ,
+									   reinterpret_cast<const BYTE*>(wide.c_str()),
+									   DWORD((wide.size() + 1) * sizeof(wchar_t)));
+	RegCloseKey(key);
+	return status == ERROR_SUCCESS;
+}
+#endif
+
+QString WebFilterSessionPolicy::currentBootId()
+{
+#ifdef _WIN32
+	static QString cached;
+	if (cached.isEmpty() == false)
+	{
+		return cached;
+	}
+
+	cached = readVolatileBootId();
+	if (cached.isEmpty() == false)
+	{
+		return cached;
+	}
+
+	cached = QUuid::createUuid().toString(QUuid::WithoutBraces);
+	if (writeVolatileBootId(cached) == false)
+	{
+		cached.clear();
+	}
+	return cached;
+#else
+	return {};
+#endif
+}
+
+bool WebFilterSessionPolicy::isSameBoot(const WebFilterSession& session,
+										qint64 nowTickMs,
+										const QString& nowBootId)
+{
+	const auto currentId = nowBootId.isEmpty() ? currentBootId() : nowBootId;
+	if (session.bootId.isEmpty() == false && currentId.isEmpty() == false)
+	{
+		return session.bootId == currentId;
+	}
+	if (session.bootId.isEmpty() == false || currentId.isEmpty() == false)
+	{
+		// One side has a boot id (upgrade, or tests passing an explicit id).
+		// Do not trust GetTickCount64: a long Windows boot can exceed the
+		// previous boot's checkpoint tick and look like the same session.
+		return false;
+	}
+
 	const auto now = nowTickMs >= 0 ? nowTickMs : currentUptimeMs();
 	return session.checkpointTickMs > 0 && now >= session.checkpointTickMs;
 }

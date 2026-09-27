@@ -715,14 +715,27 @@ static WebFilterSession persistableSession(WebFilterSession::Mode mode,
 	}
 	session.mode = mode;
 	session.domains = domains;
+
+	const auto local = PersistentWebFilterState::session();
+	if (local.isActive() && local.sessionId == session.sessionId)
+	{
+		session.checkpointElapsedMs = std::max(session.checkpointElapsedMs, local.checkpointElapsedMs);
+		if (session.checkpointWallMs <= 0)
+		{
+			session.checkpointWallMs = local.checkpointWallMs;
+		}
+		if (session.bootId.isEmpty())
+		{
+			session.bootId = local.bootId;
+		}
+	}
+
 	if (session.checkpointWallMs <= 0)
 	{
 		session.checkpointWallMs = session.startTimeMs;
 	}
-	if (session.checkpointTickMs <= 0)
-	{
-		session.checkpointTickMs = WebFilterSessionPolicy::currentUptimeMs();
-	}
+	session.checkpointTickMs = WebFilterSessionPolicy::currentUptimeMs();
+	session.bootId = WebFilterSessionPolicy::currentBootId();
 	return session;
 }
 
@@ -896,14 +909,16 @@ bool WebFilterEngine::reconcileOnServiceStart()
 				<< loaded.sessionId.toString(QUuid::WithoutBraces);
 		return restore(false) && PersistentWebFilterState::noteEmergencyUnlocked(loaded.sessionId);
 	}
-	if (loaded.isActive() && WebFilterSessionPolicy::isSameBoot(loaded))
+	const auto nowWall = QDateTime::currentMSecsSinceEpoch();
+	const auto nowTick = WebFilterSessionPolicy::currentUptimeMs();
+	if (loaded.isActive() && WebFilterSessionPolicy::isSameBoot(loaded, nowTick))
 	{
-		const auto nowTick = WebFilterSessionPolicy::currentUptimeMs();
 		auto resumed = loaded;
-		resumed.checkpointElapsedMs = std::max<qint64>(0, loaded.checkpointElapsedMs) +
-				std::max<qint64>(0, nowTick - loaded.checkpointTickMs);
+		resumed.checkpointElapsedMs = WebFilterSessionPolicy::effectiveElapsedMs(
+					loaded, nowWall, nowTick, configuredMaxTtlMs());
 		resumed.checkpointTickMs = nowTick;
-		resumed.checkpointWallMs = QDateTime::currentMSecsSinceEpoch();
+		resumed.checkpointWallMs = nowWall;
+		resumed.bootId = WebFilterSessionPolicy::currentBootId();
 		const auto live = WebFilterSessionPolicy::liveAction(
 					resumed, resumed.checkpointElapsedMs, configuredMaxTtlMs());
 		if (live != WebFilterSessionPolicy::LiveAction::Continue)
@@ -943,11 +958,14 @@ bool WebFilterEngine::reconcileOnServiceStart()
 			return stopSession(session.sessionId, WebFilterSession::StopReason::RecoveryExpired, false);
 		}
 
-		const auto elapsed = WebFilterSessionPolicy::recoveredElapsedMs(
-					session, QDateTime::currentMSecsSinceEpoch(), configuredMaxTtlMs());
+		const auto elapsed = WebFilterSessionPolicy::effectiveElapsedMs(
+					session, QDateTime::currentMSecsSinceEpoch(),
+					WebFilterSessionPolicy::currentUptimeMs(), configuredMaxTtlMs());
 		auto resumed = session;
 		resumed.checkpointElapsedMs = elapsed;
 		resumed.checkpointWallMs = QDateTime::currentMSecsSinceEpoch();
+		resumed.checkpointTickMs = WebFilterSessionPolicy::currentUptimeMs();
+		resumed.bootId = WebFilterSessionPolicy::currentBootId();
 		vInfo() << "Web filter restored after reboot"
 				<< "session=" << resumed.sessionId.toString(QUuid::WithoutBraces)
 				<< "mode=" << WebFilterSessionPolicy::modeName(resumed.mode);

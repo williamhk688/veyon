@@ -452,7 +452,9 @@ void WebFilterFeaturePlugin::showOverlayWorker(VeyonServerInterface& server,
 	const auto session = PersistentWebFilterState::session();
 	const auto remaining = WebFilterSessionPolicy::remainingMs(
 				session.durationMs,
-				QDateTime::currentMSecsSinceEpoch() - session.startTimeMs,
+				WebFilterSessionPolicy::effectiveElapsedMs(
+					session, QDateTime::currentMSecsSinceEpoch(),
+					WebFilterSessionPolicy::currentUptimeMs(), configuredMaxTtlMs()),
 				configuredMaxTtlMs());
 	server.featureWorkerManager().sendMessageToManagedSystemWorker(
 				FeatureMessage{uid, FeatureCommand::ShowStatus}

@@ -6,6 +6,8 @@
 
 #include <QtTest>
 
+#include <QString>
+
 #include "WebFilterLists.h"
 #include "WebFilterSessionPolicy.h"
 
@@ -136,6 +138,51 @@ private slots:
 				 WebFilterSessionPolicy::LiveAction::Continue);
 		QCOMPARE(WebFilterSessionPolicy::recoveryAction(session, session.startTimeMs + 10 * 60 * 1000),
 				 WebFilterSessionPolicy::RecoveryAction::Expire);
+	}
+
+	void sessionJsonKeepsBootId()
+	{
+		auto session = WebFilterSessionPolicy::create(
+					WebFilterSession::Mode::Whitelist, 3 * 60 * 1000, 1'000'000);
+		session.bootId = QStringLiteral("boot-json");
+		bool ok = false;
+		const auto loaded = WebFilterSession::fromJsonText(session.toJsonText(), &ok);
+		QVERIFY(ok);
+		QCOMPARE(loaded.bootId, QStringLiteral("boot-json"));
+		QCOMPARE(loaded.sessionId, session.sessionId);
+	}
+
+	void rebootDetectedWhenNewUptimeExceedsOldTick()
+	{
+		auto session = WebFilterSessionPolicy::create(
+					WebFilterSession::Mode::Whitelist, 3 * 60 * 1000, 1'000'000);
+		session.bootId = QStringLiteral("boot-before");
+		session.checkpointTickMs = 20'000;
+		session.checkpointElapsedMs = 15 * 1000;
+		session.checkpointWallMs = session.startTimeMs + 15 * 1000;
+		QVERIFY(WebFilterSessionPolicy::isSameBoot(session, 90'000, QStringLiteral("boot-before")));
+		QVERIFY(WebFilterSessionPolicy::isSameBoot(session, 90'000, QStringLiteral("boot-after")) == false);
+
+		const auto nowWall = session.checkpointWallMs + 60 * 1000;
+		const auto elapsed = WebFilterSessionPolicy::effectiveElapsedMs(
+					session, nowWall, 90'000, WebFilterSessionPolicy::DefaultMaxTtlMs,
+					QStringLiteral("boot-after"));
+		QCOMPARE(elapsed, 75 * 1000);
+		QCOMPARE(WebFilterSessionPolicy::remainingMs(session.durationMs, elapsed), 105 * 1000);
+	}
+
+	void sameBootIdKeepsMonotonicElapsed()
+	{
+		auto session = WebFilterSessionPolicy::create(
+					WebFilterSession::Mode::Blacklist, 3 * 60 * 1000, 1'000'000);
+		session.bootId = QStringLiteral("boot-live");
+		session.checkpointTickMs = 20'000;
+		session.checkpointElapsedMs = 15 * 1000;
+		session.checkpointWallMs = session.startTimeMs + 15 * 1000;
+		const auto elapsed = WebFilterSessionPolicy::effectiveElapsedMs(
+					session, session.checkpointWallMs + 10 * 60 * 1000, 25'000,
+					WebFilterSessionPolicy::DefaultMaxTtlMs, QStringLiteral("boot-live"));
+		QCOMPARE(elapsed, 20 * 1000);
 	}
 
 	void liveWallClockBackwardStillExpiresOnMonotonic()

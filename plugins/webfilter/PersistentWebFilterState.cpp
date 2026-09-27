@@ -454,6 +454,7 @@ bool PersistentWebFilterState::updateCheckpoint(qint64 elapsedMs, qint64 wallMs)
 	current.checkpointElapsedMs = std::max<qint64>(0, elapsedMs);
 	current.checkpointWallMs = wallMs;
 	current.checkpointTickMs = WebFilterSessionPolicy::currentUptimeMs();
+	current.bootId = WebFilterSessionPolicy::currentBootId();
 	return writeSessionText(current.toJsonText());
 }
 

@@ -37,7 +37,9 @@ restriction until the teacher restores it or the session expires.
 
 Unplugging student Wi-Fi does not unlock the session. While the
 PC is on, the countdown uses powered-on time and ignores system
-clock changes. After a real reboot, recovery adds the wall-clock
+clock changes. After a real reboot, a volatile boot id detects
+the new boot even when Windows has already been up longer than
+the previous checkpoint tick, and recovery adds the wall-clock
 gap so shutdown time still counts. Changing the clock without
 admin rights is normally blocked on student accounts.
 

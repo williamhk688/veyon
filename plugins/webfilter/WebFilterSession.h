@@ -44,6 +44,7 @@ public:
 	qint64 checkpointElapsedMs = 0;
 	qint64 checkpointWallMs = 0;
 	qint64 checkpointTickMs = 0;
+	QString bootId;
 
 	bool isActive() const;
 	QJsonObject toJson() const;
