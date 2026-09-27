@@ -28,9 +28,12 @@ hotkey; a new teacher session still applies. After a successful
 hotkey unlock the Windows service releases Interception so the
 keyboard works without waiting for Master Unlock / Stop Demo.
 
-Lock, demo, and web-filter flags are written to HKLM
-(VeyonScreenLock / VeyonDemo / VeyonWebFilter) and flushed to disk
-so a reboot keeps the restriction.
+A leftover EmergencyUnlock value from an earlier hotkey no longer
+wipes lock or web filter on the next boot. That flag is volatile
+(same boot only). Lock, demo, and web-filter flags are written to
+HKLM (VeyonScreenLock / VeyonDemo / VeyonWebFilter) and mirrored
+under %ProgramData%\Veyon\classroom-persist so a reboot keeps the
+restriction until the teacher restores it or the session expires.
 
 Install this package on both the teacher PC and every student PC,
 then restart Veyon Service.
@@ -39,8 +42,8 @@ Direct download:
 
   https://github.com/williamhk688/veyon/raw/feature/web-filter-session/installer/veyon_4_11_2_win64_modified_setup.exe
 
-Source: b0603a4c
+Source: 1964af11
 Branch: feature/web-filter-session
 
 SHA-256:
-  a6303736e3deeef8a33208bbde2bc9173ebda694a21990a144c56fd77868f2ff
+  6dac010cccbc90b0f1930c1ee5e74c50a156b18402999b8befabe7f75b793fe5
