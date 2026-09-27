@@ -28,6 +28,8 @@
 #include <QAction>
 #include <QApplication>
 #include <QGuiApplication>
+#include <QNetworkProxy>
+#include <QNetworkProxyFactory>
 #include <QDir>
 #include <QFile>
 #include <QFont>
@@ -232,6 +234,15 @@ void VeyonCore::setupApplicationParameters()
 	QCoreApplication::setOrganizationDomain( QStringLiteral( "veyon.io" ) );
 	QCoreApplication::setApplicationName( QStringLiteral( "Veyon" ) );
 	QGuiApplication::setApplicationDisplayName( QStringLiteral( "CYC Veyon" ) );
+
+	// Classroom LAN traffic must never follow a leftover system PAC/proxy.
+	qputenv("QT_NO_PROXY", QByteArrayLiteral("1"));
+	qunsetenv("http_proxy");
+	qunsetenv("https_proxy");
+	qunsetenv("HTTP_PROXY");
+	qunsetenv("HTTPS_PROXY");
+	QNetworkProxyFactory::setUseSystemConfiguration(false);
+	QNetworkProxy::setApplicationProxy(QNetworkProxy(QNetworkProxy::NoProxy));
 
 	QCoreApplication::setAttribute( Qt::AA_ShareOpenGLContexts );
 

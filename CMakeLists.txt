@@ -208,8 +208,9 @@ if(WITH_BUNDLED_LIBVNC)
 	set_default_target_properties(vncclient)
 	set_default_target_properties(vncserver)
 
-	target_compile_options(vncclient PRIVATE "-Wno-unused-function;-Wno-unused-variable;-Wno-deprecated-declarations")
-	target_compile_options(vncserver PRIVATE "-Wno-deprecated-declarations;-Wno-unused-function;-Wno-unused-variable;-Wno-unused-but-set-variable;-Wno-discarded-qualifiers;-Wno-unused-result;-Wno-restrict;-Wno-switch;-Wno-maybe-uninitialized")
+	# Veyon defines UNICODE globally; LibVNC's Win32 A-API calls then fail -Werror.
+	target_compile_options(vncclient PRIVATE "-UUNICODE;-U_UNICODE;-Wno-unused-function;-Wno-unused-variable;-Wno-deprecated-declarations;-Wno-incompatible-pointer-types")
+	target_compile_options(vncserver PRIVATE "-UUNICODE;-U_UNICODE;-Wno-deprecated-declarations;-Wno-unused-function;-Wno-unused-variable;-Wno-unused-but-set-variable;-Wno-discarded-qualifiers;-Wno-unused-result;-Wno-restrict;-Wno-switch;-Wno-maybe-uninitialized;-Wno-incompatible-pointer-types")
 
 	target_include_directories(vncclient PUBLIC
 		${libvncserver_SOURCE_DIR}/src/common
