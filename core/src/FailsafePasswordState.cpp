@@ -25,6 +25,7 @@
 #include <QFile>
 #include <QSettings>
 
+#include "ClassroomPersistStore.h"
 #include "FailsafePasswordState.h"
 #include "Logger.h"
 
@@ -328,6 +329,7 @@ bool FailsafePasswordState::clearPersistedInputLocks()
 	{
 		ok = deleteRegistryKey(VeyonScreenLockRegistryKey) && ok;
 		ok = deleteRegistryKey(VeyonDemoRegistryKey) && ok;
+		ok = ClassroomPersistStore::removeClassroomLocks() && ok;
 	}
 #endif
 
@@ -363,8 +365,8 @@ static bool writeEmergencyUnlockFlag(bool enabled)
 #ifdef Q_OS_WIN
 	HKEY key = nullptr;
 	DWORD disposition = 0;
-	if (RegCreateKeyExW(HKEY_LOCAL_MACHINE, VeyonFailsafeRegistryKey, 0, nullptr,
-						REG_OPTION_NON_VOLATILE, KEY_WRITE | KEY_WOW64_64KEY,
+	if (RegCreateKeyExW(HKEY_LOCAL_MACHINE, VeyonFailsafeRuntimeRegistryKey, 0, nullptr,
+						REG_OPTION_VOLATILE, KEY_WRITE | KEY_WOW64_64KEY,
 						nullptr, &key, &disposition) != ERROR_SUCCESS)
 	{
 		return false;
@@ -405,7 +407,7 @@ static bool readEmergencyUnlockFlag()
 
 #ifdef Q_OS_WIN
 	HKEY key = nullptr;
-	if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, VeyonFailsafeRegistryKey, 0,
+	if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, VeyonFailsafeRuntimeRegistryKey, 0,
 					  KEY_READ | KEY_WOW64_64KEY, &key) != ERROR_SUCCESS)
 	{
 		return false;
@@ -430,6 +432,12 @@ bool FailsafePasswordState::noteEmergencyUnlockSucceeded()
 }
 
 
+bool FailsafePasswordState::clearEmergencyUnlockNote()
+{
+	return writeEmergencyUnlockFlag(false);
+}
+
+
 bool FailsafePasswordState::isEmergencyUnlockPending()
 {
 	return readEmergencyUnlockFlag();
@@ -444,4 +452,31 @@ bool FailsafePasswordState::consumeEmergencyUnlockSucceeded()
 	}
 	writeEmergencyUnlockFlag(false);
 	return true;
+}
+
+
+bool FailsafePasswordState::discardStaleEmergencyUnlock()
+{
+#ifdef Q_OS_WIN
+	if (passwordTestFilePath().isEmpty() == false)
+	{
+		return true;
+	}
+
+	HKEY key = nullptr;
+	if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, VeyonFailsafeRegistryKey, 0,
+					  KEY_WRITE | KEY_WOW64_64KEY, &key) != ERROR_SUCCESS)
+	{
+		return true;
+	}
+	const auto status = RegDeleteValueW(key, VeyonFailsafeEmergencyUnlockValue);
+	RegCloseKey(key);
+	if (status == ERROR_SUCCESS)
+	{
+		vInfo() << "discarded leftover non-volatile emergency unlock flag";
+	}
+	return status == ERROR_SUCCESS || status == ERROR_FILE_NOT_FOUND || status == ERROR_PATH_NOT_FOUND;
+#else
+	return true;
+#endif
 }

@@ -15,6 +15,7 @@
 #include <QTimer>
 
 #include "ComputerControlInterface.h"
+#include "FailsafePasswordState.h"
 #include "FailsafeUnlock.h"
 #include "FeatureWorkerManager.h"
 #include "PersistentWebFilterState.h"
@@ -61,7 +62,7 @@ WebFilterFeaturePlugin::WebFilterFeaturePlugin(QObject* parent) :
 					   m_webFilterFeature.uid(),
 					   tr("Allow whitelist sites only (只允許白名單網站)"), {},
 					   tr("Allow only the configured whitelist websites. Veyon stays allowed. "
-						  "This does not stay active after the student computer restarts."),
+						  "The session stays after reboot until the teacher restores it or the duration expires."),
 					   QStringLiteral(":/webfilter/web-filter-allow.png")),
 	m_restoreFeature(QStringLiteral("WebFilterRestore"),
 					 Feature::Flag::Action | Feature::Flag::AllComponents,
@@ -85,6 +86,7 @@ WebFilterFeaturePlugin::WebFilterFeaturePlugin(QObject* parent) :
 		// Only start the IPC thread here. Reconcile/PAC cleanup runs inside
 		// that thread so VeyonCore construction and veyon-server spawn are
 		// not blocked (and no window is created in this process).
+		FailsafePasswordState::discardStaleEmergencyUnlock();
 		startServiceHelper();
 		m_watchdog = new WebFilterSessionWatchdog(this);
 		m_watchdog->start();

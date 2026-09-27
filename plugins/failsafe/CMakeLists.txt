@@ -20,6 +20,16 @@ if(WITH_TESTS)
 		Qt${QT_MAJOR_VERSION}::Test
 		veyon-core)
 
+	add_executable(ClassroomPersistStoreTest
+		ClassroomPersistStoreTest.cpp)
+	add_test(NAME ClassroomPersistStoreTest COMMAND ClassroomPersistStoreTest)
+	target_include_directories(ClassroomPersistStoreTest PRIVATE
+		${CMAKE_CURRENT_SOURCE_DIR}
+		${CMAKE_CURRENT_BINARY_DIR})
+	target_link_libraries(ClassroomPersistStoreTest PRIVATE
+		Qt${QT_MAJOR_VERSION}::Test
+		veyon-core)
+
 	add_executable(FailsafePasswordKeyFilterTest
 		FailsafePasswordKeyFilterTest.cpp)
 	add_test(NAME FailsafePasswordKeyFilterTest COMMAND FailsafePasswordKeyFilterTest)

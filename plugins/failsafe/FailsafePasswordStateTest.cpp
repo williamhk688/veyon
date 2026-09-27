@@ -129,6 +129,23 @@ private slots:
 		QVERIFY(FailsafePasswordState::consumeEmergencyUnlockSucceeded() == false);
 	}
 
+	void discardStaleDoesNotClearSameBootFlag()
+	{
+		QVERIFY(FailsafePasswordState::noteEmergencyUnlockSucceeded());
+		QVERIFY(FailsafePasswordState::discardStaleEmergencyUnlock());
+		QVERIFY(FailsafePasswordState::isEmergencyUnlockPending());
+		QVERIFY(FailsafePasswordState::clearEmergencyUnlockNote());
+		QVERIFY(FailsafePasswordState::isEmergencyUnlockPending() == false);
+	}
+
+	void teacherReapplyClearsEmergencyFlag()
+	{
+		QVERIFY(FailsafePasswordState::noteEmergencyUnlockSucceeded());
+		QVERIFY(FailsafePasswordState::isEmergencyUnlockPending());
+		QVERIFY(FailsafePasswordState::clearEmergencyUnlockNote());
+		QVERIFY(FailsafePasswordState::isEmergencyUnlockPending() == false);
+	}
+
 private:
 	QString m_passwordFile;
 	QString m_lockFile;

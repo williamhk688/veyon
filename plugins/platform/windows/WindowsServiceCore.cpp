@@ -25,11 +25,12 @@
 #include <windows.h>
 
 #include "WindowsServiceCore.h"
+#include "VeyonCore.h"
+#include "ClassroomPersistStore.h"
 #include "FailsafePasswordState.h"
 #include "PlatformInputDeviceFunctions.h"
 #include "PlatformPluginInterface.h"
 #include "SasEventListener.h"
-#include "VeyonCore.h"
 #include "VeyonDemoRegistry.h"
 #include "VeyonScreenLockRegistry.h"
 #include "WindowsCoreFunctions.h"
@@ -500,8 +501,20 @@ static bool persistedDemoInputLockIsSet()
 
 bool WindowsServiceCore::persistedScreenLockIsSet()
 {
-	return persistedRegistrySzIsSet(VeyonScreenLockRegistryKey, VeyonScreenLockRegistryValue) ||
-			persistedDemoInputLockIsSet();
+	if (persistedRegistrySzIsSet(VeyonScreenLockRegistryKey, VeyonScreenLockRegistryValue) ||
+		persistedDemoInputLockIsSet())
+	{
+		return true;
+	}
+
+	if (ClassroomPersistStore::readValue(ClassroomPersistStore::screenLockName()).isEmpty() == false)
+	{
+		return true;
+	}
+
+	const auto demoText = ClassroomPersistStore::readValue(ClassroomPersistStore::demoName());
+	return demoText.contains(QLatin1String("\"lockInput\":true")) ||
+			demoText.contains(QLatin1String("\"LockInput\":true"));
 }
 
 
@@ -533,6 +546,7 @@ void WindowsServiceCore::startPersistedScreenLockWatch()
 										 L"Global\\VeyonFailsafeReleaseInput");
 	}
 
+	FailsafePasswordState::discardStaleEmergencyUnlock();
 	armPersistedScreenLockWatch();
 	syncPersistedScreenLockInput();
 }
@@ -581,15 +595,6 @@ void WindowsServiceCore::armPersistedScreenLockWatch()
 
 void WindowsServiceCore::syncPersistedScreenLockInput()
 {
-	if (FailsafePasswordState::isEmergencyUnlockPending())
-	{
-		vInfo() << "emergency unlock pending; releasing input at Windows service";
-		FailsafePasswordState::clearPersistedInputLocks();
-		VeyonCore::platform().inputDeviceFunctions().enableInputDevices();
-		m_persistedInputLockApplied = false;
-		return;
-	}
-
 	const bool locked = persistedScreenLockIsSet();
 	if (locked == m_persistedInputLockApplied)
 	{

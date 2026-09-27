@@ -13,6 +13,10 @@
 #include <QSettings>
 #include <QUuid>
 
+#ifdef Q_OS_WIN
+#include "ClassroomPersistStore.h"
+#endif
+#include "FailsafePasswordState.h"
 #include "PersistentWebFilterState.h"
 #include "VeyonCore.h"
 #include "WebFilterLists.h"
@@ -172,7 +176,16 @@ PersistentWebFilterState::Mode PersistentWebFilterState::readMode()
 	}
 
 #ifdef Q_OS_WIN
-	return modeFromString(readRegistryString(ModeValue));
+	auto mode = modeFromString(readRegistryString(ModeValue));
+	if (mode == Mode::Off)
+	{
+		mode = modeFromString(ClassroomPersistStore::readValue(ClassroomPersistStore::webFilterModeName()));
+		if (mode != Mode::Off)
+		{
+			writeRegistryString(ModeValue, modeToString(mode));
+		}
+	}
+	return mode;
 #else
 	return Mode::Off;
 #endif
@@ -198,7 +211,9 @@ bool PersistentWebFilterState::writeMode(Mode mode)
 	}
 
 #ifdef Q_OS_WIN
-	return writeRegistryString(ModeValue, mode == Mode::Off ? QString() : modeToString(mode));
+	const auto modeText = mode == Mode::Off ? QString() : modeToString(mode);
+	ClassroomPersistStore::writeValue(ClassroomPersistStore::webFilterModeName(), modeText);
+	return writeRegistryString(ModeValue, modeText);
 #else
 	Q_UNUSED(mode)
 	return false;
@@ -217,6 +232,14 @@ QStringList PersistentWebFilterState::readDomains()
 	else
 	{
 		text = readRegistryString(DomainsValue);
+		if (text.isEmpty())
+		{
+			text = ClassroomPersistStore::readValue(ClassroomPersistStore::webFilterDomainsName());
+			if (text.isEmpty() == false)
+			{
+				writeRegistryString(DomainsValue, text);
+			}
+		}
 	}
 #endif
 	return WebFilterLists::normalizeDomains(text.split(QLatin1Char('\n'), Qt::SkipEmptyParts));
@@ -242,6 +265,7 @@ bool PersistentWebFilterState::writeDomains(const QStringList& domains)
 	}
 
 #ifdef Q_OS_WIN
+	ClassroomPersistStore::writeValue(ClassroomPersistStore::webFilterDomainsName(), text);
 	return writeRegistryString(DomainsValue, text);
 #else
 	Q_UNUSED(domains)
@@ -299,7 +323,16 @@ static QString readSessionText()
 	}
 
 #ifdef Q_OS_WIN
-	return readRegistryString(SessionValue);
+	auto text = readRegistryString(SessionValue);
+	if (text.isEmpty())
+	{
+		text = ClassroomPersistStore::readValue(ClassroomPersistStore::webFilterSessionName());
+		if (text.isEmpty() == false)
+		{
+			writeRegistryString(SessionValue, text);
+		}
+	}
+	return text;
 #else
 	return {};
 #endif
@@ -324,6 +357,7 @@ static bool writeSessionText(const QString& text)
 	}
 
 #ifdef Q_OS_WIN
+	ClassroomPersistStore::writeValue(ClassroomPersistStore::webFilterSessionName(), text);
 	return writeRegistryString(SessionValue, text);
 #else
 	Q_UNUSED(text)
@@ -400,7 +434,12 @@ bool PersistentWebFilterState::saveSession(const WebFilterSession& session)
 	const bool modeOk = session.mode == Mode::Blacklist ?
 							setBlacklist(session.domains) :
 							setWhitelist(session.domains);
-	return modeOk && writeSessionText(session.toJsonText());
+	const bool saved = modeOk && writeSessionText(session.toJsonText());
+	if (saved)
+	{
+		FailsafePasswordState::clearEmergencyUnlockNote();
+	}
+	return saved;
 }
 
 
@@ -512,5 +551,8 @@ bool PersistentWebFilterState::clear()
 		return QFile::exists(path) == false || QFile::remove(path);
 	}
 
+#ifdef Q_OS_WIN
+	ClassroomPersistStore::removeWebFilter();
+#endif
 	return true;
 }
