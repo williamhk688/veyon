@@ -46,6 +46,7 @@ void WebFilterConfigurationPage::resetWidgets()
 	ui->allowedList->addItems(WebFilterLists::fromJson(m_configuration.allowedWebsites()));
 	ui->extraProxyList->addItems(WebFilterLists::fromJson(m_configuration.extraProxyWebsites()));
 	ui->hardcodedList->addItems(WebFilterLists::hardcodedProxyDomains() + WebFilterLists::hardcodedDohDomains());
+	ui->ttlMinutes->setValue(m_configuration.temporaryWebFilterMaxTtlMinutes());
 }
 
 void WebFilterConfigurationPage::connectWidgetsToProperties()
@@ -146,4 +147,5 @@ void WebFilterConfigurationPage::saveLists()
 	m_configuration.setExtraProxyWebsites(WebFilterLists::toJson(normalizedExtra));
 	m_configuration.setAllowedWebsites(WebFilterLists::toJson(
 		WebFilterLists::effectiveAllowlist(allowed, normalizedExtra)));
+	m_configuration.setTemporaryWebFilterMaxTtlMinutes(ui->ttlMinutes->value());
 }

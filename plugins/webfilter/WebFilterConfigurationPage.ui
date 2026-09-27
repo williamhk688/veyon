@@ -27,6 +27,30 @@
     </widget>
    </item>
    <item>
+    <layout class="QHBoxLayout" name="ttlLayout">
+     <item>
+      <widget class="QLabel" name="ttlLabel">
+       <property name="text">
+        <string>Temporary web filter hard TTL (minutes)</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QSpinBox" name="ttlMinutes">
+       <property name="minimum">
+        <number>30</number>
+       </property>
+       <property name="maximum">
+        <number>720</number>
+       </property>
+       <property name="value">
+        <number>180</number>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
     <widget class="QGroupBox" name="blockedGroup">
      <property name="title">
       <string>黑名單網站（可改）</string>
