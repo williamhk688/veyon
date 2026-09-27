@@ -57,6 +57,7 @@ QJsonObject WebFilterSession::toJson() const
 	object.insert(QStringLiteral("version"), version);
 	object.insert(QStringLiteral("checkpointElapsedMs"), checkpointElapsedMs);
 	object.insert(QStringLiteral("checkpointWallMs"), checkpointWallMs);
+	object.insert(QStringLiteral("checkpointTickMs"), checkpointTickMs);
 	QJsonArray domainArray;
 	for (const auto& domain : domains)
 	{
@@ -100,6 +101,7 @@ WebFilterSession WebFilterSession::fromJson(const QJsonObject& object, bool* ok)
 	session.version = object.value(QStringLiteral("version")).toInt();
 	session.checkpointElapsedMs = qint64(object.value(QStringLiteral("checkpointElapsedMs")).toDouble());
 	session.checkpointWallMs = qint64(object.value(QStringLiteral("checkpointWallMs")).toDouble());
+	session.checkpointTickMs = qint64(object.value(QStringLiteral("checkpointTickMs")).toDouble());
 	const auto domainArray = object.value(QStringLiteral("domains")).toArray();
 	for (const auto& value : domainArray)
 	{

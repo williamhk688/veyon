@@ -717,6 +717,10 @@ static WebFilterSession persistableSession(WebFilterSession::Mode mode,
 	{
 		session.checkpointWallMs = session.startTimeMs;
 	}
+	if (session.checkpointTickMs <= 0)
+	{
+		session.checkpointTickMs = WebFilterSessionPolicy::currentUptimeMs();
+	}
 	return session;
 }
 
@@ -889,6 +893,27 @@ bool WebFilterEngine::reconcileOnServiceStart()
 		vInfo() << "not reapplying emergency-unlocked session after reboot"
 				<< loaded.sessionId.toString(QUuid::WithoutBraces);
 		return restore(false) && PersistentWebFilterState::noteEmergencyUnlocked(loaded.sessionId);
+	}
+	if (loaded.isActive() && WebFilterSessionPolicy::isSameBoot(loaded))
+	{
+		const auto nowTick = WebFilterSessionPolicy::currentUptimeMs();
+		auto resumed = loaded;
+		resumed.checkpointElapsedMs = std::max<qint64>(0, loaded.checkpointElapsedMs) +
+				std::max<qint64>(0, nowTick - loaded.checkpointTickMs);
+		resumed.checkpointTickMs = nowTick;
+		resumed.checkpointWallMs = QDateTime::currentMSecsSinceEpoch();
+		const auto live = WebFilterSessionPolicy::liveAction(
+					resumed, resumed.checkpointElapsedMs, configuredMaxTtlMs());
+		if (live != WebFilterSessionPolicy::LiveAction::Continue)
+		{
+			return stopSession(resumed.sessionId, WebFilterSession::StopReason::ClientTimerExpired, false);
+		}
+		vInfo() << "Web filter still active on same boot";
+		if (resumed.mode == WebFilterSession::Mode::Blacklist)
+		{
+			return applyBlacklist(resumed.domains, {}, false, resumed);
+		}
+		return applyWhitelist(resumed.domains, {}, false, resumed);
 	}
 	QString reconstructReason;
 	const auto session = WebFilterSessionPolicy::recoverForReboot(

@@ -517,7 +517,7 @@ void WebFilterFeaturePlugin::syncPersistedSession()
 		return;
 	}
 
-	if (session.isActive())
+	if (session.isActive() && WebFilterSessionPolicy::isSameBoot(session) == false)
 	{
 		QString reason;
 		const auto action = WebFilterSessionPolicy::recoveryAction(

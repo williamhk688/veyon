@@ -43,6 +43,7 @@ public:
 	QStringList domains;
 	qint64 checkpointElapsedMs = 0;
 	qint64 checkpointWallMs = 0;
+	qint64 checkpointTickMs = 0;
 
 	bool isActive() const;
 	QJsonObject toJson() const;

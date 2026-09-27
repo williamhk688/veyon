@@ -8,6 +8,10 @@
 
 #include <algorithm>
 
+#ifdef Q_OS_WIN
+#include <windows.h>
+#endif
+
 #include "WebFilterSessionPolicy.h"
 
 qint64 WebFilterSessionPolicy::clampDurationMs(qint64 requestedMs, qint64 maxTtlMs)
@@ -46,6 +50,7 @@ WebFilterSession WebFilterSessionPolicy::create(WebFilterSession::Mode mode,
 	session.domains = domains;
 	session.checkpointElapsedMs = 0;
 	session.checkpointWallMs = startWallMs;
+	session.checkpointTickMs = currentUptimeMs();
 	return session;
 }
 
@@ -158,6 +163,21 @@ qint64 WebFilterSessionPolicy::recoveredElapsedMs(const WebFilterSession& sessio
 
 	const auto wallDelta = std::clamp<qint64>(rawDelta, 0, maxMs);
 	return std::max<qint64>(0, session.checkpointElapsedMs) + wallDelta;
+}
+
+qint64 WebFilterSessionPolicy::currentUptimeMs()
+{
+#ifdef Q_OS_WIN
+	return qint64(GetTickCount64());
+#else
+	return 0;
+#endif
+}
+
+bool WebFilterSessionPolicy::isSameBoot(const WebFilterSession& session, qint64 nowTickMs)
+{
+	const auto now = nowTickMs >= 0 ? nowTickMs : currentUptimeMs();
+	return session.checkpointTickMs > 0 && now >= session.checkpointTickMs;
 }
 
 WebFilterSessionPolicy::RecoveryAction WebFilterSessionPolicy::recoveryAction(const WebFilterSession& session,

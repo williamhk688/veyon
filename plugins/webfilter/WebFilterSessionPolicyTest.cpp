@@ -124,6 +124,20 @@ private slots:
 				 WebFilterSessionPolicy::LiveAction::Continue);
 	}
 
+	void sameBootIgnoresWallClockJump()
+	{
+		auto session = WebFilterSessionPolicy::create(
+					WebFilterSession::Mode::Whitelist, 60 * 1000, 1'000'000);
+		session.checkpointTickMs = 10'000;
+		QVERIFY(WebFilterSessionPolicy::isSameBoot(session, 20'000));
+		QVERIFY(WebFilterSessionPolicy::isSameBoot(session, 5'000) == false);
+		QVERIFY(WebFilterSessionPolicy::isSameBoot(session, 0) == false);
+		QCOMPARE(WebFilterSessionPolicy::liveAction(session, 5 * 1000),
+				 WebFilterSessionPolicy::LiveAction::Continue);
+		QCOMPARE(WebFilterSessionPolicy::recoveryAction(session, session.startTimeMs + 10 * 60 * 1000),
+				 WebFilterSessionPolicy::RecoveryAction::Expire);
+	}
+
 	void liveWallClockBackwardStillExpiresOnMonotonic()
 	{
 		const auto session = WebFilterSessionPolicy::create(

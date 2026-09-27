@@ -65,6 +65,8 @@ public:
 	static qint64 recoveredElapsedMs(const WebFilterSession& session,
 									 qint64 nowWallMs,
 									 qint64 maxTtlMs = DefaultMaxTtlMs);
+	static qint64 currentUptimeMs();
+	static bool isSameBoot(const WebFilterSession& session, qint64 nowTickMs = -1);
 	static qint64 remainingMs(qint64 durationMs, qint64 elapsedMs, qint64 maxTtlMs = DefaultMaxTtlMs);
 	static int authFailureDelayMs(int failureCount);
 

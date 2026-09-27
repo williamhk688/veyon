@@ -96,11 +96,14 @@ bool WebFilterSessionWatchdog::poll()
 	track(session);
 
 	const auto maxTtlMs = WebFilterEngine::configuredMaxTtlMs();
-	if (WebFilterSessionPolicy::recoveryAction(session, QDateTime::currentMSecsSinceEpoch(), maxTtlMs)
-		== WebFilterSessionPolicy::RecoveryAction::Expire)
+	if (WebFilterSessionPolicy::isSameBoot(session) == false)
 	{
-		stopCurrent(WebFilterSession::StopReason::RecoveryExpired);
-		return true;
+		if (WebFilterSessionPolicy::recoveryAction(session, QDateTime::currentMSecsSinceEpoch(), maxTtlMs)
+			== WebFilterSessionPolicy::RecoveryAction::Expire)
+		{
+			stopCurrent(WebFilterSession::StopReason::RecoveryExpired);
+			return true;
+		}
 	}
 
 	const auto elapsed = m_baseElapsedMs + m_elapsed.elapsed();
