@@ -11,6 +11,16 @@ set(webfilter_sources
 	WebFilterLists.h
 	PersistentWebFilterState.cpp
 	PersistentWebFilterState.h
+	WebFilterSession.cpp
+	WebFilterSession.h
+	WebFilterSessionPolicy.cpp
+	WebFilterSessionPolicy.h
+	WebFilterSessionWatchdog.cpp
+	WebFilterSessionWatchdog.h
+	WebFilterDurationDialog.cpp
+	WebFilterDurationDialog.h
+	WebFilterSessionStatusDialog.cpp
+	WebFilterSessionStatusDialog.h
 	WebFilterEngine.cpp
 	WebFilterEngine.h
 	WebFilterStatusOverlay.cpp
@@ -48,12 +58,26 @@ if(WITH_TESTS)
 	add_executable(PersistentWebFilterStateTest
 		PersistentWebFilterStateTest.cpp
 		PersistentWebFilterState.cpp
+		WebFilterSession.cpp
 		WebFilterLists.cpp)
 	add_test(NAME PersistentWebFilterStateTest COMMAND PersistentWebFilterStateTest)
 	target_include_directories(PersistentWebFilterStateTest PRIVATE
 		${CMAKE_CURRENT_SOURCE_DIR}
 		${CMAKE_CURRENT_BINARY_DIR})
 	target_link_libraries(PersistentWebFilterStateTest PRIVATE
+		Qt${QT_MAJOR_VERSION}::Test
+		veyon-core)
+
+	add_executable(WebFilterSessionPolicyTest
+		WebFilterSessionPolicyTest.cpp
+		WebFilterSession.cpp
+		WebFilterSessionPolicy.cpp
+		WebFilterLists.cpp)
+	add_test(NAME WebFilterSessionPolicyTest COMMAND WebFilterSessionPolicyTest)
+	target_include_directories(WebFilterSessionPolicyTest PRIVATE
+		${CMAKE_CURRENT_SOURCE_DIR}
+		${CMAKE_CURRENT_BINARY_DIR})
+	target_link_libraries(WebFilterSessionPolicyTest PRIVATE
 		Qt${QT_MAJOR_VERSION}::Test
 		veyon-core)
 endif()

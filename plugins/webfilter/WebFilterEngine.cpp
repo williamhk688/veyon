@@ -9,21 +9,39 @@
 #if !defined(_WIN32)
 
 #include "VeyonCore.h"
+#include "WebFilterConfiguration.h"
 #include "WebFilterEngine.h"
+#include "WebFilterSessionPolicy.h"
 
-bool WebFilterEngine::applyBlacklist(const QStringList&, const QStringList&, bool)
+qint64 WebFilterEngine::configuredMaxTtlMs()
+{
+	WebFilterConfiguration configuration(&VeyonCore::config());
+	const auto minutes = configuration.temporaryWebFilterMaxTtlMinutes();
+	if (minutes <= 0)
+	{
+		return WebFilterSessionPolicy::DefaultMaxTtlMs;
+	}
+	return qint64(minutes) * 60 * 1000;
+}
+
+bool WebFilterEngine::applyBlacklist(const QStringList&, const QStringList&, bool, const WebFilterSession&)
 {
 	vWarning() << "web filter is only implemented on Windows";
 	return false;
 }
 
-bool WebFilterEngine::applyWhitelist(const QStringList&, const QStringList&, bool)
+bool WebFilterEngine::applyWhitelist(const QStringList&, const QStringList&, bool, const WebFilterSession&)
 {
 	vWarning() << "web filter is only implemented on Windows";
 	return false;
 }
 
 bool WebFilterEngine::restore(bool)
+{
+	return true;
+}
+
+bool WebFilterEngine::stopSession(const QUuid&, WebFilterSession::StopReason, bool)
 {
 	return true;
 }

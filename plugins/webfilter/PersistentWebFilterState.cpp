@@ -6,6 +6,7 @@
  * This file is part of Veyon - https://veyon.io
  */
 
+#include <algorithm>
 #include <memory>
 
 #include <QFile>
@@ -23,6 +24,7 @@
 static const auto ModeKey = QStringLiteral("Mode");
 static const auto DomainsKey = QStringLiteral("Domains");
 static const auto SnapshotKey = QStringLiteral("PolicySnapshot");
+static const auto SessionKey = QStringLiteral("Session");
 static const auto StateFileEnvVar = QByteArrayLiteral("VEYON_WEBFILTER_STATE_FILE");
 
 #ifdef Q_OS_WIN
@@ -30,6 +32,7 @@ static constexpr wchar_t RegistryKey[] = L"SOFTWARE\\Veyon Solutions\\VeyonWebFi
 static constexpr wchar_t ModeValue[] = L"Mode";
 static constexpr wchar_t DomainsValue[] = L"Domains";
 static constexpr wchar_t SnapshotValue[] = L"PolicySnapshot";
+static constexpr wchar_t SessionValue[] = L"Session";
 #endif
 
 
@@ -281,6 +284,47 @@ bool PersistentWebFilterState::writeSnapshot(const QString& snapshot)
 }
 
 
+static QString readSessionText()
+{
+	if (testStateFilePath().isEmpty() == false)
+	{
+		return testSettings()->value(SessionKey).toString();
+	}
+
+#ifdef Q_OS_WIN
+	return readRegistryString(SessionValue);
+#else
+	return {};
+#endif
+}
+
+
+static bool writeSessionText(const QString& text)
+{
+	if (testStateFilePath().isEmpty() == false)
+	{
+		auto settings = testSettings();
+		if (text.isEmpty())
+		{
+			settings->remove(SessionKey);
+		}
+		else
+		{
+			settings->setValue(SessionKey, text);
+		}
+		settings->sync();
+		return settings->status() == QSettings::NoError;
+	}
+
+#ifdef Q_OS_WIN
+	return writeRegistryString(SessionValue, text);
+#else
+	Q_UNUSED(text)
+	return false;
+#endif
+}
+
+
 PersistentWebFilterState::Mode PersistentWebFilterState::mode()
 {
 	return readMode();
@@ -317,9 +361,59 @@ bool PersistentWebFilterState::setPolicySnapshot(const QString& snapshot)
 }
 
 
+WebFilterSession PersistentWebFilterState::session()
+{
+	bool ok = false;
+	auto loaded = WebFilterSession::fromJsonText(readSessionText(), &ok);
+	if (ok == false)
+	{
+		loaded.mode = readMode();
+		loaded.domains = readDomains();
+		return loaded;
+	}
+	if (loaded.domains.isEmpty())
+	{
+		loaded.domains = readDomains();
+	}
+	if (loaded.mode == Mode::Off)
+	{
+		loaded.mode = readMode();
+	}
+	return loaded;
+}
+
+
+bool PersistentWebFilterState::saveSession(const WebFilterSession& session)
+{
+	if (session.isActive() == false)
+	{
+		return writeSessionText({}) && writeMode(Mode::Off);
+	}
+
+	const bool modeOk = session.mode == Mode::Blacklist ?
+							setBlacklist(session.domains) :
+							setWhitelist(session.domains);
+	return modeOk && writeSessionText(session.toJsonText());
+}
+
+
+bool PersistentWebFilterState::updateCheckpoint(qint64 elapsedMs, qint64 wallMs)
+{
+	auto current = session();
+	if (current.isActive() == false)
+	{
+		return false;
+	}
+	current.checkpointElapsedMs = std::max<qint64>(0, elapsedMs);
+	current.checkpointWallMs = wallMs;
+	return writeSessionText(current.toJsonText());
+}
+
+
 bool PersistentWebFilterState::clear()
 {
-	if (writeDomains({}) == false || writeMode(Mode::Off) == false || writeSnapshot({}) == false)
+	if (writeDomains({}) == false || writeMode(Mode::Off) == false ||
+		writeSnapshot({}) == false || writeSessionText({}) == false)
 	{
 		return false;
 	}

@@ -11,6 +11,8 @@
 #include <QStringList>
 #include <QThread>
 
+#include "WebFilterSession.h"
+
 class WindowsWebFilterIpcServer : public QThread
 {
 	Q_OBJECT
@@ -36,5 +38,7 @@ public:
 	};
 
 	static bool request(Command command, const QStringList& domains = {},
-						const QStringList& extraProxies = {});
+						const QStringList& extraProxies = {},
+						const WebFilterSession& session = {},
+						WebFilterSession::StopReason reason = WebFilterSession::StopReason::TeacherManual);
 };
