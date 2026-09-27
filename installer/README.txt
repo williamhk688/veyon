@@ -5,29 +5,23 @@ This branch (cursor/classroom-web-filter-ecca) adds classroom web
 filter on top of the WOL edition.
 
 Master: one 「網絡管制」button with a dropdown
-  - 封鎖不良網站
-  - 只准課堂網站
+  - 封鎖黑名單網站
+  - 只允許白名單網站
   - 恢復網絡
 
-While a filter is active, students show a badge in the top-right
-(orange = blacklist, blue = classroom-only). The badge runs in
-veyon-worker so veyon-server stays alive.
-
-This build also re-applies the Windows Firewall exception for
-veyon-server.exe on every Service start (needed after reinstall,
-especially on Wi-Fi / Public profiles) and does not follow a
-leftover system PAC/proxy.
+Blacklist shows a red block badge; whitelist shows a green globe.
+Restore removes the badge. Whitelist allow rules include http/https
+scheme forms so listed classroom sites can open.
 
 Install this package on both the teacher PC and every student PC,
-then restart Veyon Service. Teacher and student must be on the same
-LAN. Ethernet unplugged is fine if both use the same Wi-Fi subnet.
+then restart Veyon Service.
 
 Direct download:
 
   https://github.com/williamhk688/veyon/raw/cursor/classroom-web-filter-ecca/installer/veyon_4_11_2_win64_modified_setup.exe
 
-Source: fa83ed5e
+Source: cf37de4a
 Branch: cursor/classroom-web-filter-ecca
 
 SHA-256:
-  bdb5b944f0fc7fa2d5011ea7ca1f897dee4f097e5d0dd128498b75ef522a11d0
+  0946a1e30523329c6baeb96ac144c21df994782f0c8bfccc7935fa30e132a61f
