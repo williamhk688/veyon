@@ -97,6 +97,11 @@ WebFilterFeaturePlugin::WebFilterFeaturePlugin(QObject* parent) :
 
 WebFilterFeaturePlugin::~WebFilterFeaturePlugin()
 {
+	if (m_watchdog)
+	{
+		m_watchdog->requestInterruption();
+		m_watchdog->wait(3000);
+	}
 	delete m_statusOverlay;
 }
 
@@ -474,17 +479,71 @@ void WebFilterFeaturePlugin::restoreOverlayWorker()
 		return;
 	}
 
+	if (m_sessionSyncTimer == nullptr)
+	{
+		m_sessionSyncTimer = new QTimer(this);
+		connect(m_sessionSyncTimer, &QTimer::timeout, this, &WebFilterFeaturePlugin::syncPersistedSession);
+		m_sessionSyncTimer->start(int(WebFilterSessionPolicy::WatchdogIntervalMs));
+	}
+
+	syncPersistedSession();
 	if (PersistentWebFilterState::mode() == PersistentWebFilterState::Mode::Off)
 	{
 		return;
 	}
 
-	showOverlayWorker(*m_server, PersistentWebFilterState::mode());
 	const auto uid = overlayFeatureUid(PersistentWebFilterState::mode());
 	if (uid.isNull() == false &&
 		m_server->featureWorkerManager().isWorkerRunning(uid) == false)
 	{
 		QTimer::singleShot(2000, this, &WebFilterFeaturePlugin::restoreOverlayWorker);
+	}
+}
+
+
+
+void WebFilterFeaturePlugin::syncPersistedSession()
+{
+	if (m_server == nullptr)
+	{
+		return;
+	}
+
+	const auto session = PersistentWebFilterState::session();
+	const auto mode = PersistentWebFilterState::mode();
+	if (session.isActive() == false && mode == PersistentWebFilterState::Mode::Off)
+	{
+		hideOverlayWorker(*m_server);
+		return;
+	}
+
+	if (session.isActive())
+	{
+		QString reason;
+		const auto action = WebFilterSessionPolicy::recoveryAction(
+					session, QDateTime::currentMSecsSinceEpoch(), configuredMaxTtlMs(), &reason);
+		if (action != WebFilterSessionPolicy::RecoveryAction::Reapply)
+		{
+#ifdef Q_OS_WIN
+			WindowsWebFilterIpcClient::request(WindowsWebFilterIpcClient::Command::Restore,
+											   {}, {}, session,
+											   action == WebFilterSessionPolicy::RecoveryAction::Expire ?
+												   WebFilterSession::StopReason::ClientTimerExpired :
+												   WebFilterSession::StopReason::RecoveryExpired);
+#endif
+			hideOverlayWorker(*m_server);
+			return;
+		}
+	}
+
+	if (mode != PersistentWebFilterState::Mode::Off)
+	{
+		const auto uid = overlayFeatureUid(mode);
+		if (uid.isNull() == false &&
+			m_server->featureWorkerManager().isWorkerRunning(uid) == false)
+		{
+			showOverlayWorker(*m_server, mode);
+		}
 	}
 }
 

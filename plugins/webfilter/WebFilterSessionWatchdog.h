@@ -9,26 +9,31 @@
 #pragma once
 
 #include <QElapsedTimer>
-#include <QObject>
-#include <QTimer>
+#include <QThread>
 #include <QUuid>
 
 #include "WebFilterSession.h"
 
-class WebFilterSessionWatchdog : public QObject
+class WebFilterSessionWatchdog : public QThread
 {
 	Q_OBJECT
 public:
 	explicit WebFilterSessionWatchdog(QObject* parent = nullptr);
 
-	void start();
+	/*!
+	 * One expiry pass. Safe to call from the service helper thread: the
+	 * Windows service main thread does not run a Qt event loop, so a QTimer
+	 * on that thread never fires.
+	 */
+	bool poll();
+
+protected:
+	void run() override;
 
 private:
-	void tick();
 	void track(const WebFilterSession& session);
 	void stopCurrent(WebFilterSession::StopReason reason);
 
-	QTimer m_timer{this};
 	QElapsedTimer m_elapsed;
 	QUuid m_trackedSessionId;
 	qint64 m_baseElapsedMs = 0;

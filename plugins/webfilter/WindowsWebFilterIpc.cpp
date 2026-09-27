@@ -18,6 +18,8 @@
 
 #include "VeyonCore.h"
 #include "WebFilterEngine.h"
+#include "WebFilterSessionPolicy.h"
+#include "WebFilterSessionWatchdog.h"
 #include "WindowsWebFilterIpc.h"
 
 static constexpr auto SocketWaitTimeout = 3000;
@@ -323,6 +325,7 @@ void WindowsWebFilterIpcServer::run()
 
 	// Runs on this helper thread after Service/Server startup can proceed.
 	WebFilterEngine::reconcileOnServiceStart();
+	WebFilterSessionWatchdog watchdog;
 
 	vInfo() << "web filter helper listening";
 
@@ -347,7 +350,24 @@ void WindowsWebFilterIpcServer::run()
 			}
 			else if (error == ERROR_IO_PENDING)
 			{
-				ready = waitOverlapped(pipe, &overlapped, stopEvent, INFINITE, &unused);
+				while (WaitForSingleObject(stopEvent, 0) != WAIT_OBJECT_0)
+				{
+					watchdog.poll();
+					HANDLE waits[2] = { overlapped.hEvent, stopEvent };
+					const DWORD waited = WaitForMultipleObjects(2, waits, FALSE,
+																DWORD(WebFilterSessionPolicy::WatchdogIntervalMs));
+					if (waited == WAIT_OBJECT_0)
+					{
+						ready = GetOverlappedResult(pipe, &overlapped, &unused, FALSE) != FALSE;
+						break;
+					}
+					if (waited == WAIT_OBJECT_0 + 1)
+					{
+						CancelIoEx(pipe, &overlapped);
+						GetOverlappedResult(pipe, &overlapped, &unused, FALSE);
+						break;
+					}
+				}
 			}
 		}
 		CloseHandle(overlapped.hEvent);

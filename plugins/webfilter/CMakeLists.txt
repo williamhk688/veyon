@@ -80,4 +80,20 @@ if(WITH_TESTS)
 	target_link_libraries(WebFilterSessionPolicyTest PRIVATE
 		Qt${QT_MAJOR_VERSION}::Test
 		veyon-core)
+
+	add_executable(WebFilterSessionWatchdogTest
+		WebFilterSessionWatchdogTest.cpp
+		WebFilterSessionWatchdog.cpp
+		WebFilterSession.cpp
+		WebFilterSessionPolicy.cpp
+		WebFilterLists.cpp
+		PersistentWebFilterState.cpp
+		WebFilterEngine.cpp)
+	add_test(NAME WebFilterSessionWatchdogTest COMMAND WebFilterSessionWatchdogTest)
+	target_include_directories(WebFilterSessionWatchdogTest PRIVATE
+		${CMAKE_CURRENT_SOURCE_DIR}
+		${CMAKE_CURRENT_BINARY_DIR})
+	target_link_libraries(WebFilterSessionWatchdogTest PRIVATE
+		Qt${QT_MAJOR_VERSION}::Test
+		veyon-core)
 endif()

@@ -20,16 +20,21 @@
 #include "WebFilterSessionWatchdog.h"
 
 WebFilterSessionWatchdog::WebFilterSessionWatchdog(QObject* parent) :
-	QObject(parent)
+	QThread(parent)
 {
-	m_timer.setInterval(int(WebFilterSessionPolicy::WatchdogIntervalMs));
-	connect(&m_timer, &QTimer::timeout, this, &WebFilterSessionWatchdog::tick);
 }
 
-void WebFilterSessionWatchdog::start()
+void WebFilterSessionWatchdog::run()
 {
-	m_timer.start();
-	tick();
+	while (isInterruptionRequested() == false)
+	{
+		poll();
+		for (int slept = 0; slept < WebFilterSessionPolicy::WatchdogIntervalMs &&
+			 isInterruptionRequested() == false; slept += 50)
+		{
+			QThread::msleep(50);
+		}
+	}
 }
 
 void WebFilterSessionWatchdog::track(const WebFilterSession& session)
@@ -59,7 +64,7 @@ void WebFilterSessionWatchdog::stopCurrent(WebFilterSession::StopReason reason)
 	m_baseElapsedMs = 0;
 }
 
-void WebFilterSessionWatchdog::tick()
+bool WebFilterSessionWatchdog::poll()
 {
 	if (FailsafePasswordState::consumeEmergencyUnlockSucceeded())
 	{
@@ -71,7 +76,7 @@ void WebFilterSessionWatchdog::tick()
 			m_trackedSessionId = session.sessionId;
 			stopCurrent(WebFilterSession::StopReason::EmergencyUnlock);
 		}
-		return;
+		return true;
 	}
 
 	const auto session = PersistentWebFilterState::session();
@@ -79,7 +84,7 @@ void WebFilterSessionWatchdog::tick()
 	{
 		m_trackedSessionId = QUuid();
 		m_baseElapsedMs = 0;
-		return;
+		return false;
 	}
 
 	track(session);
@@ -87,19 +92,19 @@ void WebFilterSessionWatchdog::tick()
 	const auto elapsed = m_baseElapsedMs + m_elapsed.elapsed();
 	if (WebFilterSessionPolicy::shouldFireTimer(m_trackedSessionId, PersistentWebFilterState::session().sessionId) == false)
 	{
-		return;
+		return false;
 	}
 
 	const auto action = WebFilterSessionPolicy::liveAction(session, elapsed, WebFilterEngine::configuredMaxTtlMs());
 	if (action == WebFilterSessionPolicy::LiveAction::ExpireHardTtl)
 	{
 		stopCurrent(WebFilterSession::StopReason::HardTTLExpired);
-		return;
+		return true;
 	}
 	if (action == WebFilterSessionPolicy::LiveAction::ExpireDuration)
 	{
 		stopCurrent(WebFilterSession::StopReason::ClientTimerExpired);
-		return;
+		return true;
 	}
 
 	if (elapsed - m_lastCheckpointMs >= WebFilterSessionPolicy::CheckpointIntervalMs)
@@ -107,4 +112,5 @@ void WebFilterSessionWatchdog::tick()
 		PersistentWebFilterState::updateCheckpoint(elapsed, QDateTime::currentMSecsSinceEpoch());
 		m_lastCheckpointMs = elapsed;
 	}
+	return false;
 }

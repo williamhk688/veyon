@@ -55,7 +55,7 @@ public:
 
 	QVersionNumber version() const override
 	{
-		return QVersionNumber(1, 13);
+		return QVersionNumber(1, 14);
 	}
 
 	QString name() const override
@@ -122,6 +122,7 @@ private:
 	void showOverlayWorker(VeyonServerInterface& server, WebFilterSession::Mode mode);
 	void hideOverlayWorker(VeyonServerInterface& server);
 	void restoreOverlayWorker();
+	void syncPersistedSession();
 	WebFilterSession sessionFromMessage(const FeatureMessage& message) const;
 	void addSessionArguments(FeatureMessage& message, const WebFilterSession& session) const;
 	bool promptDurationAndStart(VeyonMasterInterface& master,
@@ -144,6 +145,7 @@ private:
 	VeyonMasterInterface* m_master = nullptr;
 	WebFilterSessionStatusDialog* m_statusDialog = nullptr;
 	WebFilterSessionWatchdog* m_watchdog = nullptr;
+	QTimer* m_sessionSyncTimer = nullptr;
 	QTimer* m_teacherExpireTimer = nullptr;
 	QTimer* m_teacherTickTimer = nullptr;
 	const Feature m_webFilterFeature;
