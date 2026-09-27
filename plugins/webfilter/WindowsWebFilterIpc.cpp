@@ -295,6 +295,9 @@ void WindowsWebFilterIpcServer::run()
 		return;
 	}
 
+	// Runs on this helper thread after Service/Server startup can proceed.
+	WebFilterEngine::reconcileOnServiceStart();
+
 	vInfo() << "web filter helper listening";
 
 	while (WaitForSingleObject(stopEvent, 0) != WAIT_OBJECT_0)

@@ -396,6 +396,79 @@ bool leftoverSystemPacPresent()
 		   isVeyonPacUrl(readPolicyString(InternetSettingsKey, AutoConfigValue));
 }
 
+bool clearAutoConfigFromKey(HKEY root, const wchar_t* keyPath)
+{
+	HKEY key = nullptr;
+	if (RegOpenKeyExW(root, keyPath, 0,
+					  KEY_READ | KEY_WRITE | KEY_WOW64_64KEY, &key) != ERROR_SUCCESS)
+	{
+		return true;
+	}
+
+	DWORD type = 0;
+	DWORD size = 0;
+	if (RegQueryValueExW(key, AutoConfigValue, nullptr, &type, nullptr, &size) != ERROR_SUCCESS ||
+		type != REG_SZ || size < sizeof(wchar_t))
+	{
+		RegCloseKey(key);
+		return true;
+	}
+
+	QByteArray buffer(int(size), 0);
+	if (RegQueryValueExW(key, AutoConfigValue, nullptr, &type,
+						 reinterpret_cast<LPBYTE>(buffer.data()), &size) != ERROR_SUCCESS)
+	{
+		RegCloseKey(key);
+		return true;
+	}
+
+	auto text = QString::fromWCharArray(reinterpret_cast<const wchar_t*>(buffer.constData()),
+										int(size / sizeof(wchar_t)));
+	if (text.endsWith(QLatin1Char('\0')))
+	{
+		text.chop(1);
+	}
+
+	bool ok = true;
+	if (isVeyonPacUrl(text))
+	{
+		const auto status = RegDeleteValueW(key, AutoConfigValue);
+		ok = status == ERROR_SUCCESS || status == ERROR_FILE_NOT_FOUND;
+	}
+	RegCloseKey(key);
+	return ok;
+}
+
+void clearAutoConfigFromAllUsers()
+{
+	HKEY users = nullptr;
+	if (RegOpenKeyExW(HKEY_USERS, nullptr, 0, KEY_READ, &users) != ERROR_SUCCESS)
+	{
+		return;
+	}
+
+	for (DWORD index = 0; ; ++index)
+	{
+		wchar_t name[256] = {};
+		DWORD nameLength = 256;
+		if (RegEnumKeyExW(users, index, name, &nameLength, nullptr, nullptr, nullptr, nullptr) != ERROR_SUCCESS)
+		{
+			break;
+		}
+
+		const auto sid = QString::fromWCharArray(name, int(nameLength));
+		if (sid.startsWith(QLatin1String("S-")) == false)
+		{
+			continue;
+		}
+
+		const QString keyPath = sid + QStringLiteral("\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Internet Settings");
+		clearAutoConfigFromKey(HKEY_USERS, reinterpret_cast<LPCWSTR>(keyPath.utf16()));
+	}
+
+	RegCloseKey(users);
+}
+
 // Never install a machine-wide PAC. WinINet/AutoConfigURL can send Veyon
 // hostnames through PROXY 127.0.0.1:9 and Master then cannot connect.
 bool clearSystemPac()
@@ -412,6 +485,7 @@ bool clearSystemPac()
 	{
 		ok = writePolicyString(InternetSettingsKey, AutoConfigValue, {}) && ok;
 	}
+	clearAutoConfigFromAllUsers();
 	if (ours)
 	{
 		ok = deletePolicyValue(InternetSettingsPolicyKey, ProxySettingsPerUserValue) && ok;
@@ -576,7 +650,7 @@ bool applyBrowserWhitelist(const QStringList& domains)
 		   applyFirefoxLists(firefoxBlock, firefoxAllow);
 }
 
-bool restoreAll()
+bool restoreAll(bool restartBrowsers)
 {
 	const auto snapshot = PersistentWebFilterState::policySnapshot();
 	const auto hostsOk = updateHosts({});
@@ -600,13 +674,17 @@ bool restoreAll()
 		policyOk = restorePolicySnapshot(snapshot);
 	}
 	PersistentWebFilterState::clear();
-	reloadBrowsers();
+	if (restartBrowsers)
+	{
+		reloadBrowsers();
+	}
 	return hostsOk && pacOk && policyOk;
 }
 
 }
 
-bool WebFilterEngine::applyBlacklist(const QStringList& schoolBlocked, const QStringList& extraProxies)
+bool WebFilterEngine::applyBlacklist(const QStringList& schoolBlocked, const QStringList& extraProxies,
+									bool restartBrowsers)
 {
 	const auto domains = WebFilterLists::effectiveBlacklist(schoolBlocked, extraProxies);
 	if (ensurePolicySnapshot() == false)
@@ -620,12 +698,16 @@ bool WebFilterEngine::applyBlacklist(const QStringList& schoolBlocked, const QSt
 		return false;
 	}
 	PersistentWebFilterState::setBlacklist(domains);
-	reloadBrowsers();
+	if (restartBrowsers)
+	{
+		reloadBrowsers();
+	}
 	vInfo() << "applied web blacklist" << domains.size() << "domains";
 	return true;
 }
 
-bool WebFilterEngine::applyWhitelist(const QStringList& schoolAllowed, const QStringList& extraProxies)
+bool WebFilterEngine::applyWhitelist(const QStringList& schoolAllowed, const QStringList& extraProxies,
+									bool restartBrowsers)
 {
 	const auto allowed = WebFilterLists::effectiveAllowlist(schoolAllowed, extraProxies);
 	if (ensurePolicySnapshot() == false)
@@ -642,38 +724,43 @@ bool WebFilterEngine::applyWhitelist(const QStringList& schoolAllowed, const QSt
 		return false;
 	}
 	PersistentWebFilterState::setWhitelist(allowed);
-	reloadBrowsers();
+	if (restartBrowsers)
+	{
+		reloadBrowsers();
+	}
 	vInfo() << "applied web whitelist" << allowed.size() << "domains";
 	return true;
 }
 
-bool WebFilterEngine::restore()
+bool WebFilterEngine::restore(bool restartBrowsers)
 {
 	vInfo() << "restoring web filter";
-	return restoreAll();
+	return restoreAll(restartBrowsers);
 }
 
 bool WebFilterEngine::reconcileOnServiceStart()
 {
+	clearSystemPac();
+
 	const auto mode = PersistentWebFilterState::mode();
 	if (mode == PersistentWebFilterState::Mode::Blacklist)
 	{
 		const auto domains = PersistentWebFilterState::domains();
 		vInfo() << "reapplying persisted web blacklist";
-		return applyBlacklist(domains);
+		return applyBlacklist(domains, {}, false);
 	}
 
 	if (mode == PersistentWebFilterState::Mode::Whitelist)
 	{
 		vInfo() << "dropping web whitelist after service start";
-		return restore();
+		return restore(false);
 	}
 
 	if (PersistentWebFilterState::policySnapshot().isEmpty() == false ||
 		WebFilterLists::hostsSectionPresent(readHostsFile()))
 	{
 		vInfo() << "clearing leftover web filter artifacts";
-		return restore();
+		return restore(false);
 	}
 
 	if (leftoverSystemPacPresent())

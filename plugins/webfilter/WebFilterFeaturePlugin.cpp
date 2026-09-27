@@ -6,13 +6,16 @@
  * This file is part of Veyon - https://veyon.io
  */
 
-#include <QGuiApplication>
 #include <QMessageBox>
+#include <QTimer>
 
 #include "ComputerControlInterface.h"
+#include "FeatureWorkerManager.h"
+#include "PersistentWebFilterState.h"
 #include "VeyonCore.h"
 #include "VeyonMasterInterface.h"
 #include "VeyonServerInterface.h"
+#include "VeyonWorkerInterface.h"
 #include "WebFilterConfigurationPage.h"
 #include "WebFilterFeaturePlugin.h"
 #include "WebFilterLists.h"
@@ -60,14 +63,10 @@ WebFilterFeaturePlugin::WebFilterFeaturePlugin(QObject* parent) :
 {
 	if (VeyonCore::component() == VeyonCore::Component::Service)
 	{
+		// Only start the IPC thread here. Reconcile/PAC cleanup runs inside
+		// that thread so VeyonCore construction and veyon-server spawn are
+		// not blocked (and no window is created in this process).
 		startServiceHelper();
-	}
-	if (VeyonCore::component() == VeyonCore::Component::Server)
-	{
-		// Overlay is a QWindow and needs the event loop. Creating it during
-		// plugin load used to crash veyon-server (QWidget + QGuiApplication).
-		connect(VeyonCore::instance(), &VeyonCore::applicationLoaded,
-				this, &WebFilterFeaturePlugin::startStatusOverlay);
 	}
 }
 
@@ -127,7 +126,6 @@ void WebFilterFeaturePlugin::startServiceHelper()
 		m_ipcServer = new WindowsWebFilterIpcServer(this);
 		m_ipcServer->start();
 	}
-	WebFilterEngine::reconcileOnServiceStart();
 #else
 	return;
 #endif
@@ -135,26 +133,42 @@ void WebFilterFeaturePlugin::startServiceHelper()
 
 
 
-void WebFilterFeaturePlugin::startStatusOverlay()
+void WebFilterFeaturePlugin::syncOverlayWorker(VeyonServerInterface& server)
 {
-	if (QGuiApplication::instance() == nullptr)
+	const auto mode = PersistentWebFilterState::mode();
+	if (mode == PersistentWebFilterState::Mode::Off)
 	{
+		if (server.featureWorkerManager().isWorkerRunning(m_webFilterFeature.uid()))
+		{
+			server.featureWorkerManager().sendMessageToManagedSystemWorker(
+						FeatureMessage{m_webFilterFeature.uid(), FeatureCommand::HideStatus});
+		}
 		return;
 	}
-	if (m_statusOverlay == nullptr)
-	{
-		m_statusOverlay = new WebFilterStatusOverlay;
-	}
-	refreshStatusOverlay();
+
+	server.featureWorkerManager().sendMessageToManagedSystemWorker(
+				FeatureMessage{m_webFilterFeature.uid(), FeatureCommand::ShowStatus}
+				.addArgument(Argument::Mode, int(mode)));
 }
 
 
 
-void WebFilterFeaturePlugin::refreshStatusOverlay()
+void WebFilterFeaturePlugin::restoreOverlayWorker()
 {
-	if (m_statusOverlay)
+	if (m_server == nullptr)
 	{
-		m_statusOverlay->syncFromState();
+		return;
+	}
+
+	if (PersistentWebFilterState::mode() == PersistentWebFilterState::Mode::Off)
+	{
+		return;
+	}
+
+	syncOverlayWorker(*m_server);
+	if (m_server->featureWorkerManager().isWorkerRunning(m_webFilterFeature.uid()) == false)
+	{
+		QTimer::singleShot(2000, this, &WebFilterFeaturePlugin::restoreOverlayWorker);
 	}
 }
 
@@ -278,7 +292,6 @@ bool WebFilterFeaturePlugin::handleFeatureMessage(VeyonServerInterface& server,
 												  const MessageContext& messageContext,
 												  const FeatureMessage& message)
 {
-	Q_UNUSED(server)
 	Q_UNUSED(messageContext)
 
 	if (hasFeature(message.featureUid()) == false)
@@ -296,29 +309,79 @@ bool WebFilterFeaturePlugin::handleFeatureMessage(VeyonServerInterface& server,
 		{
 			vWarning() << "failed to apply web blacklist";
 		}
-		refreshStatusOverlay();
+		syncOverlayWorker(server);
 		return true;
 	case FeatureCommand::ApplyWhitelist:
 		if (WindowsWebFilterIpcClient::request(WindowsWebFilterIpcClient::Command::Whitelist, domains, extra) == false)
 		{
 			vWarning() << "failed to apply web whitelist";
 		}
-		refreshStatusOverlay();
+		syncOverlayWorker(server);
 		return true;
 	case FeatureCommand::Restore:
 		if (WindowsWebFilterIpcClient::request(WindowsWebFilterIpcClient::Command::Restore) == false)
 		{
 			vWarning() << "failed to restore web filter";
 		}
-		refreshStatusOverlay();
+		syncOverlayWorker(server);
+		return true;
+	case FeatureCommand::ShowStatus:
+	case FeatureCommand::HideStatus:
 		return true;
 	}
 #else
+	Q_UNUSED(server)
 	vWarning() << "web filter is only implemented on Windows";
 	Q_UNUSED(message)
-	refreshStatusOverlay();
 #endif
 	return true;
+}
+
+
+
+bool WebFilterFeaturePlugin::handleFeatureMessage(VeyonWorkerInterface& worker, const FeatureMessage& message)
+{
+	Q_UNUSED(worker)
+
+	if (hasFeature(message.featureUid()) == false)
+	{
+		return false;
+	}
+
+	switch (message.command<FeatureCommand>())
+	{
+	case FeatureCommand::ShowStatus:
+	{
+		const auto mode = PersistentWebFilterState::Mode(
+				message.argument(Argument::Mode).toInt());
+		if (m_statusOverlay == nullptr)
+		{
+			m_statusOverlay = new WebFilterStatusOverlay;
+		}
+		m_statusOverlay->setMode(mode == PersistentWebFilterState::Mode::Off
+								 ? PersistentWebFilterState::mode()
+								 : mode);
+		return true;
+	}
+	case FeatureCommand::HideStatus:
+		delete m_statusOverlay;
+		m_statusOverlay = nullptr;
+		return true;
+	case FeatureCommand::ApplyBlacklist:
+	case FeatureCommand::ApplyWhitelist:
+	case FeatureCommand::Restore:
+		break;
+	}
+
+	return false;
+}
+
+
+
+void WebFilterFeaturePlugin::initializeServer(VeyonServerInterface& server)
+{
+	m_server = &server;
+	restoreOverlayWorker();
 }
 
 

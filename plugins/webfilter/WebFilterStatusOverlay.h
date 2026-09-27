@@ -8,32 +8,27 @@
 
 #pragma once
 
-#include <QBackingStore>
-#include <QWindow>
+#include <QWidget>
 
 #include "PersistentWebFilterState.h"
 
-// QWindow, not QWidget: veyon-server is a QGuiApplication and will abort if a
-// QWidget is created ("Cannot create a QWidget without QApplication").
-class WebFilterStatusOverlay : public QWindow
+// QWidget is only safe in veyon-worker (QApplication). Never construct this
+// in veyon-server — that process is QGuiApplication-only and will abort.
+class WebFilterStatusOverlay : public QWidget
 {
 	Q_OBJECT
 public:
-	explicit WebFilterStatusOverlay();
-	~WebFilterStatusOverlay() override;
+	explicit WebFilterStatusOverlay(QWidget* parent = nullptr);
 
 	void syncFromState();
 	void setMode(PersistentWebFilterState::Mode mode);
 
 protected:
-	bool event(QEvent* event) override;
-	void exposeEvent(QExposeEvent* event) override;
-	void resizeEvent(QResizeEvent* event) override;
+	void paintEvent(QPaintEvent* event) override;
+	void showEvent(QShowEvent* event) override;
 
 private:
-	void render();
 	void reposition();
 
-	QBackingStore* m_backingStore = nullptr;
 	PersistentWebFilterState::Mode m_mode = PersistentWebFilterState::Mode::Off;
 };

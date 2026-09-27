@@ -15,6 +15,7 @@
 #ifdef Q_OS_WIN
 class WindowsWebFilterIpcServer;
 #endif
+class VeyonServerInterface;
 class WebFilterStatusOverlay;
 
 class WebFilterFeaturePlugin : public QObject, PluginInterface,
@@ -28,7 +29,8 @@ public:
 	enum class Argument
 	{
 		Domains,
-		ExtraProxies
+		ExtraProxies,
+		Mode
 	};
 	Q_ENUM(Argument)
 
@@ -42,7 +44,7 @@ public:
 
 	QVersionNumber version() const override
 	{
-		return QVersionNumber(1, 4);
+		return QVersionNumber(1, 5);
 	}
 
 	QString name() const override
@@ -82,6 +84,10 @@ public:
 							  const MessageContext& messageContext,
 							  const FeatureMessage& message) override;
 
+	bool handleFeatureMessage(VeyonWorkerInterface& worker, const FeatureMessage& message) override;
+
+	void initializeServer(VeyonServerInterface& server) override;
+
 	ConfigurationPage* createConfigurationPage() override;
 
 private:
@@ -89,12 +95,14 @@ private:
 	{
 		ApplyBlacklist,
 		ApplyWhitelist,
-		Restore
+		Restore,
+		ShowStatus,
+		HideStatus
 	};
 
 	void startServiceHelper();
-	void startStatusOverlay();
-	void refreshStatusOverlay();
+	void syncOverlayWorker(VeyonServerInterface& server);
+	void restoreOverlayWorker();
 	QStringList configuredBlockedDomains() const;
 	QStringList configuredAllowedDomains() const;
 	QStringList configuredExtraProxyDomains() const;
@@ -106,6 +114,7 @@ private:
 	const Feature m_restoreFeature;
 	const FeatureList m_features;
 	WebFilterStatusOverlay* m_statusOverlay = nullptr;
+	VeyonServerInterface* m_server = nullptr;
 #ifdef Q_OS_WIN
 	WindowsWebFilterIpcServer* m_ipcServer = nullptr;
 #endif
