@@ -35,9 +35,10 @@ HKLM (VeyonScreenLock / VeyonDemo / VeyonWebFilter) and mirrored
 under %ProgramData%\Veyon\classroom-persist so a reboot keeps the
 restriction until the teacher restores it or the session expires.
 
-Unplugging student Wi-Fi does not unlock the session. When the
-chosen duration elapses, the student PC expires the web filter
-locally even if Master is unreachable.
+Unplugging student Wi-Fi does not unlock the session. While the
+PC is on, the countdown uses powered-on time. After shutdown or
+reboot, recovery adds the wall-clock gap, so a one-minute session
+that stayed off longer than one minute unlocks on boot.
 
 Install this package on both the teacher PC and every student PC,
 then restart Veyon Service.
@@ -46,8 +47,8 @@ Direct download:
 
   https://github.com/williamhk688/veyon/raw/feature/web-filter-session/installer/veyon_4_11_2_win64_modified_setup.exe
 
-Source: 21c649f1
+Source: 176f92d6
 Branch: feature/web-filter-session
 
 SHA-256:
-  2cda20d474ba6ac3dab43bfc0de2e81b3a6d66920b0d5a4d5e3a97c9da3c7237
+  93040cfae23a041432406b5df32c2ba348793c456d2b6db164691a60d8d5e056
