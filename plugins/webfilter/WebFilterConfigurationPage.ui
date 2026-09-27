@@ -3,7 +3,7 @@
  <class>WebFilterConfigurationPage</class>
  <widget class="QWidget" name="WebFilterConfigurationPage">
   <property name="windowTitle">
-   <string>網絡管制</string>
+   <string>Web filter (網絡管制)</string>
   </property>
   <property name="windowIcon">
    <iconset resource="webfilter.qrc">
@@ -22,7 +22,7 @@
       <bool>true</bool>
      </property>
      <property name="text">
-      <string>工具列「網絡管制」可選封鎖黑名單網站、只允許白名單網站或恢復網絡。內建代理站不能刪；可用下面按鈕新增學校自己的代理站。Google 翻譯不會寫死封鎖。Veyon 通訊永遠可通。</string>
+      <string>工具列「網絡管制 (Web filter)」可選封鎖黑名單網站 (Block blacklist sites)、只允許白名單網站 (Allow whitelist sites only) 或恢復網絡 (Restore web)。內建代理站不能刪；可用下面按鈕新增學校自己的代理站。Google 翻譯不會寫死封鎖。Veyon 通訊永遠可通。</string>
      </property>
     </widget>
    </item>

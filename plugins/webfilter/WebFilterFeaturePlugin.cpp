@@ -42,14 +42,14 @@ WebFilterFeaturePlugin::WebFilterFeaturePlugin(QObject* parent) :
 					   Feature::Flag::Action | Feature::Flag::AllComponents,
 					   Feature::Uid(QStringLiteral("a1f0c3d2-8e47-4b19-9c6a-2d5e7f81b430")),
 					   m_webFilterFeature.uid(),
-					   tr("封鎖黑名單網站"), {},
+					   tr("封鎖黑名單網站 (Block blacklist sites)"), {},
 					   tr("Block the built-in proxy list, extra school proxies, and the blacklist."),
 					   QStringLiteral(":/webfilter/web-filter-block.png")),
 	m_whitelistFeature(QStringLiteral("WebFilterWhitelist"),
 					   Feature::Flag::Action | Feature::Flag::AllComponents,
 					   Feature::Uid(QStringLiteral("b2e1d4c3-9f58-4c2a-8d7b-3e6f8092c541")),
 					   m_webFilterFeature.uid(),
-					   tr("只允許白名單網站"), {},
+					   tr("只允許白名單網站 (Allow whitelist sites only)"), {},
 					   tr("Allow only the configured whitelist websites. Veyon stays allowed. "
 						  "This does not stay active after the student computer restarts."),
 					   QStringLiteral(":/webfilter/web-filter-allow.png")),
@@ -135,6 +135,41 @@ void WebFilterFeaturePlugin::startServiceHelper()
 
 
 
+Feature::Uid WebFilterFeaturePlugin::overlayFeatureUid(PersistentWebFilterState::Mode mode) const
+{
+	switch (mode)
+	{
+	case PersistentWebFilterState::Mode::Blacklist:
+		return m_blacklistFeature.uid();
+	case PersistentWebFilterState::Mode::Whitelist:
+		return m_whitelistFeature.uid();
+	case PersistentWebFilterState::Mode::Off:
+		break;
+	}
+
+	return {};
+}
+
+
+
+void WebFilterFeaturePlugin::stopOverlayWorker(VeyonServerInterface& server, Feature::Uid featureUid)
+{
+	if (featureUid.isNull())
+	{
+		return;
+	}
+
+	auto& manager = server.featureWorkerManager();
+	if (manager.isWorkerRunning(featureUid))
+	{
+		manager.sendMessageToManagedSystemWorker(
+					FeatureMessage{featureUid, FeatureCommand::HideStatus});
+	}
+	manager.stopWorker(featureUid);
+}
+
+
+
 void WebFilterFeaturePlugin::showOverlayWorker(VeyonServerInterface& server,
 											  PersistentWebFilterState::Mode mode)
 {
@@ -144,8 +179,19 @@ void WebFilterFeaturePlugin::showOverlayWorker(VeyonServerInterface& server,
 		return;
 	}
 
+	const auto uid = overlayFeatureUid(mode);
+	for (const auto& other : { m_webFilterFeature.uid(),
+							   m_blacklistFeature.uid(),
+							   m_whitelistFeature.uid() })
+	{
+		if (other != uid)
+		{
+			stopOverlayWorker(server, other);
+		}
+	}
+
 	server.featureWorkerManager().sendMessageToManagedSystemWorker(
-				FeatureMessage{m_webFilterFeature.uid(), FeatureCommand::ShowStatus}
+				FeatureMessage{uid, FeatureCommand::ShowStatus}
 				.addArgument(Argument::Mode, int(mode)));
 }
 
@@ -153,13 +199,9 @@ void WebFilterFeaturePlugin::showOverlayWorker(VeyonServerInterface& server,
 
 void WebFilterFeaturePlugin::hideOverlayWorker(VeyonServerInterface& server)
 {
-	auto& manager = server.featureWorkerManager();
-	if (manager.isWorkerRunning(m_webFilterFeature.uid()))
-	{
-		manager.sendMessageToManagedSystemWorker(
-					FeatureMessage{m_webFilterFeature.uid(), FeatureCommand::HideStatus});
-	}
-	manager.stopWorker(m_webFilterFeature.uid());
+	stopOverlayWorker(server, m_webFilterFeature.uid());
+	stopOverlayWorker(server, m_blacklistFeature.uid());
+	stopOverlayWorker(server, m_whitelistFeature.uid());
 }
 
 
@@ -177,7 +219,9 @@ void WebFilterFeaturePlugin::restoreOverlayWorker()
 	}
 
 	showOverlayWorker(*m_server, PersistentWebFilterState::mode());
-	if (m_server->featureWorkerManager().isWorkerRunning(m_webFilterFeature.uid()) == false)
+	const auto uid = overlayFeatureUid(PersistentWebFilterState::mode());
+	if (uid.isNull() == false &&
+		m_server->featureWorkerManager().isWorkerRunning(uid) == false)
 	{
 		QTimer::singleShot(2000, this, &WebFilterFeaturePlugin::restoreOverlayWorker);
 	}
@@ -273,7 +317,7 @@ bool WebFilterFeaturePlugin::startFeature(VeyonMasterInterface& master, const Fe
 	if (feature.uid() == m_blacklistFeature.uid())
 	{
 		if (QMessageBox::question(master.mainWindow(),
-								  tr("封鎖黑名單網站"),
+								  tr("封鎖黑名單網站 (Block blacklist sites)"),
 								  tr("將封鎖內建代理站、學校新增的代理站，以及 Configurator 裡的黑名單網站。\n"
 									 "Veyon 通訊不受影響。是否套用到已選電腦？"))
 			!= QMessageBox::Yes)
@@ -284,7 +328,7 @@ bool WebFilterFeaturePlugin::startFeature(VeyonMasterInterface& master, const Fe
 	else if (feature.uid() == m_whitelistFeature.uid())
 	{
 		if (QMessageBox::question(master.mainWindow(),
-								  tr("只允許白名單網站"),
+								  tr("只允許白名單網站 (Allow whitelist sites only)"),
 								  tr("學生將只能開啟 Configurator 裡的白名單網站。\n"
 									 "Veyon 通訊維持可通。重開機後此限制會自動解除。\n"
 									 "是否套用到已選電腦？"))
@@ -402,6 +446,25 @@ void WebFilterFeaturePlugin::initializeServer(VeyonServerInterface& server)
 {
 	m_server = &server;
 	restoreOverlayWorker();
+}
+
+
+
+bool WebFilterFeaturePlugin::isFeatureActive(VeyonServerInterface& server, Feature::Uid featureUid) const
+{
+	Q_UNUSED(server)
+
+	const auto mode = PersistentWebFilterState::mode();
+	if (featureUid == m_blacklistFeature.uid())
+	{
+		return mode == PersistentWebFilterState::Mode::Blacklist;
+	}
+	if (featureUid == m_whitelistFeature.uid())
+	{
+		return mode == PersistentWebFilterState::Mode::Whitelist;
+	}
+
+	return false;
 }
 
 

@@ -45,7 +45,7 @@ public:
 
 	QVersionNumber version() const override
 	{
-		return QVersionNumber(1, 6);
+		return QVersionNumber(1, 7);
 	}
 
 	QString name() const override
@@ -89,6 +89,8 @@ public:
 
 	void initializeServer(VeyonServerInterface& server) override;
 
+	bool isFeatureActive(VeyonServerInterface& server, Feature::Uid featureUid) const override;
+
 	ConfigurationPage* createConfigurationPage() override;
 
 private:
@@ -102,6 +104,8 @@ private:
 	};
 
 	void startServiceHelper();
+	Feature::Uid overlayFeatureUid(PersistentWebFilterState::Mode mode) const;
+	void stopOverlayWorker(VeyonServerInterface& server, Feature::Uid featureUid);
 	void showOverlayWorker(VeyonServerInterface& server, PersistentWebFilterState::Mode mode);
 	void hideOverlayWorker(VeyonServerInterface& server);
 	void restoreOverlayWorker();

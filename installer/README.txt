@@ -4,14 +4,16 @@ CYC Veyon 4.11.2 (based on Veyon) — Windows 64-bit installer
 This branch (cursor/classroom-web-filter-ecca) adds classroom web
 filter on top of the WOL edition.
 
-Master: one 「網絡管制」button with a dropdown
-  - 封鎖黑名單網站
-  - 只允許白名單網站
-  - 恢復網絡
+Master: one 「網絡管制 (Web filter)」 button with a dropdown
+  - 封鎖黑名單網站 (Block blacklist sites)
+  - 只允許白名單網站 (Allow whitelist sites only)
+  - 恢復網絡 (Restore web)
 
-Blacklist shows a red block badge; whitelist shows a green globe.
-Restore removes the badge. Whitelist allow rules include http/https
-scheme forms so listed classroom sites can open.
+The computer-tile icon follows the current mode: red block for
+blacklist, green globe for whitelist. Restore removes the badge.
+Configurator sidebar title is 「Web filter (網絡管制)」.
+Whitelist allow rules include http/https scheme forms so listed
+classroom sites can open.
 
 Install this package on both the teacher PC and every student PC,
 then restart Veyon Service.

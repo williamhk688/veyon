@@ -43,11 +43,11 @@ void WebFilterStatusOverlay::setMode(PersistentWebFilterState::Mode mode)
 
 	if (m_mode == PersistentWebFilterState::Mode::Blacklist)
 	{
-		setToolTip(tr("網絡管制：正在封鎖黑名單網站"));
+		setToolTip(tr("網絡管制：正在封鎖黑名單網站 (Blocking blacklist sites)"));
 	}
 	else
 	{
-		setToolTip(tr("網絡管制：只允許白名單網站"));
+		setToolTip(tr("網絡管制：只允許白名單網站 (Allowing whitelist sites only)"));
 	}
 
 	reposition();
