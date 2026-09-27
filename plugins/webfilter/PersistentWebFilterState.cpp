@@ -11,6 +11,7 @@
 
 #include <QFile>
 #include <QSettings>
+#include <QUuid>
 
 #include "PersistentWebFilterState.h"
 #include "VeyonCore.h"
