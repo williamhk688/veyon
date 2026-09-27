@@ -11,7 +11,10 @@
 
 #include "ComputerControlInterface.h"
 #include "FeatureWorkerManager.h"
+#include "Filesystem.h"
 #include "PersistentWebFilterState.h"
+#include "PlatformNetworkFunctions.h"
+#include "PlatformPluginInterface.h"
 #include "VeyonCore.h"
 #include "VeyonMasterInterface.h"
 #include "VeyonServerInterface.h"
@@ -121,6 +124,23 @@ QStringList WebFilterFeaturePlugin::configuredExtraProxyDomains() const
 void WebFilterFeaturePlugin::startServiceHelper()
 {
 #ifdef Q_OS_WIN
+	// Reinstalls can leave Server running while Windows Firewall still
+	// blocks TCP 11100, especially on Wi-Fi/Public profiles. Re-apply here
+	// so Master can reach the student without opening Configurator.
+	if (VeyonCore::config().isFirewallExceptionEnabled())
+	{
+		auto& network = VeyonCore::platform().networkFunctions();
+		if (network.configureFirewallException(VeyonCore::filesystem().serverFilePath(),
+											   QStringLiteral("Veyon Server"), true) == false)
+		{
+			vWarning() << "failed to restore Veyon Server firewall exception";
+		}
+		if (network.configureFirewallException(VeyonCore::filesystem().workerFilePath(),
+											   QStringLiteral("Veyon Worker"), true) == false)
+		{
+			vWarning() << "failed to restore Veyon Worker firewall exception";
+		}
+	}
 	if (m_ipcServer == nullptr)
 	{
 		m_ipcServer = new WindowsWebFilterIpcServer(this);
