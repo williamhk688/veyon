@@ -33,4 +33,8 @@ bool WebFilterEngine::reconcileOnServiceStart()
 	return true;
 }
 
+void WebFilterEngine::ensureClassroomFirewall()
+{
+}
+
 #endif

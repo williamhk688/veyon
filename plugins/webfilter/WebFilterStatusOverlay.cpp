@@ -8,7 +8,7 @@
 
 #include <QGuiApplication>
 #include <QPainter>
-#include <QPainterPath>
+#include <QPixmap>
 #include <QScreen>
 #include <QShowEvent>
 
@@ -43,11 +43,11 @@ void WebFilterStatusOverlay::setMode(PersistentWebFilterState::Mode mode)
 
 	if (m_mode == PersistentWebFilterState::Mode::Blacklist)
 	{
-		setToolTip(tr("網絡管制：正在封鎖不良網站"));
+		setToolTip(tr("網絡管制：正在封鎖黑名單網站"));
 	}
 	else
 	{
-		setToolTip(tr("網絡管制：只准課堂網站"));
+		setToolTip(tr("網絡管制：只允許白名單網站"));
 	}
 
 	reposition();
@@ -65,37 +65,23 @@ void WebFilterStatusOverlay::paintEvent(QPaintEvent*)
 
 	QPainter painter(this);
 	painter.setRenderHint(QPainter::Antialiasing);
+	painter.setRenderHint(QPainter::SmoothPixmapTransform);
 
 	const bool whitelist = m_mode == PersistentWebFilterState::Mode::Whitelist;
-	const QColor fill = whitelist ? QColor(15, 92, 166) : QColor(196, 86, 16);
-	const QColor ring = whitelist ? QColor(232, 244, 255) : QColor(255, 236, 214);
+	const QColor fill = whitelist ? QColor(16, 122, 72) : QColor(196, 48, 28);
+	const QColor ring = whitelist ? QColor(220, 255, 230) : QColor(255, 220, 214);
+	const auto icon = QPixmap(whitelist
+							  ? QStringLiteral(":/webfilter/web-filter-allow.png")
+							  : QStringLiteral(":/webfilter/web-filter-block.png"));
 
 	painter.setBrush(fill);
 	painter.setPen(QPen(ring, 3));
-	painter.drawEllipse(QRectF(3, 3, width() - 6, height() - 6));
+	painter.drawEllipse(QRectF(2, 2, width() - 4, height() - 4));
 
-	painter.setPen(QPen(Qt::white, 2.6, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
-	const QRectF globe(14, 12, 28, 28);
-	painter.setBrush(Qt::NoBrush);
-	painter.drawEllipse(globe);
-	painter.drawLine(QPointF(globe.center().x(), globe.top()), QPointF(globe.center().x(), globe.bottom()));
-	painter.drawArc(QRectF(globe.left() + 7, globe.top(), 14, globe.height()), 90 * 16, 180 * 16);
-	painter.drawArc(QRectF(globe.left() + 7, globe.top(), 14, globe.height()), 270 * 16, 180 * 16);
-	painter.drawLine(QPointF(globe.left(), globe.center().y()), QPointF(globe.right(), globe.center().y()));
-
-	if (whitelist)
+	if (icon.isNull() == false)
 	{
-		QPainterPath check;
-		check.moveTo(16, 40);
-		check.lineTo(24, 47);
-		check.lineTo(42, 28);
-		painter.setPen(QPen(QColor(180, 255, 196), 4, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
-		painter.drawPath(check);
-	}
-	else
-	{
-		painter.setPen(QPen(QColor(255, 220, 220), 4, Qt::SolidLine, Qt::RoundCap));
-		painter.drawLine(QPointF(14, 14), QPointF(42, 42));
+		const QRect iconRect(10, 10, width() - 20, height() - 20);
+		painter.drawPixmap(iconRect, icon);
 	}
 }
 

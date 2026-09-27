@@ -59,7 +59,7 @@ void WebFilterConfigurationPage::applyConfiguration()
 
 void WebFilterConfigurationPage::addBlockedWebsite()
 {
-	const auto domain = QInputDialog::getText(this, tr("加入不良網站"), tr("網域 (例如 example.com)"));
+	const auto domain = QInputDialog::getText(this, tr("加入黑名單網站"), tr("網域 (例如 example.com)"));
 	const auto normalized = WebFilterLists::normalizeDomain(domain);
 	if (normalized.isEmpty())
 	{
@@ -80,7 +80,7 @@ void WebFilterConfigurationPage::removeBlockedWebsite()
 
 void WebFilterConfigurationPage::addAllowedWebsite()
 {
-	const auto domain = QInputDialog::getText(this, tr("加入課堂網站"), tr("網域 (例如 classroom.google.com)"));
+	const auto domain = QInputDialog::getText(this, tr("加入白名單網站"), tr("網域 (例如 classroom.google.com)"));
 	const auto normalized = WebFilterLists::normalizeDomain(domain);
 	if (normalized.isEmpty())
 	{

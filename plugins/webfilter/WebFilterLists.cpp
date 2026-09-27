@@ -284,7 +284,19 @@ QStringList WebFilterLists::chromeUrlPatterns(const QStringList& domains)
 
 QStringList WebFilterLists::browserAllowPatterns(const QStringList& domains)
 {
-	auto patterns = chromePolicyPatterns(domains);
+	// When URLBlocklist is "*", Chrome/Edge only honour URLAllowlist entries
+	// that include a scheme. Host-only and host-dot forms are kept as well.
+	QStringList patterns;
+	for (const auto& domain : normalizeDomains(domains))
+	{
+		patterns.append(domain);
+		patterns.append(QLatin1Char('.') + domain);
+		for (const auto& scheme : {QStringLiteral("http://"), QStringLiteral("https://")})
+		{
+			patterns.append(scheme + domain);
+			patterns.append(scheme + QLatin1Char('.') + domain);
+		}
+	}
 	patterns.append({
 		QStringLiteral("about:"),
 		QStringLiteral("chrome://"),

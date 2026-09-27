@@ -6,15 +6,13 @@
  * This file is part of Veyon - https://veyon.io
  */
 
+#include <QCoreApplication>
 #include <QMessageBox>
 #include <QTimer>
 
 #include "ComputerControlInterface.h"
 #include "FeatureWorkerManager.h"
-#include "Filesystem.h"
 #include "PersistentWebFilterState.h"
-#include "PlatformNetworkFunctions.h"
-#include "PlatformPluginInterface.h"
 #include "VeyonCore.h"
 #include "VeyonMasterInterface.h"
 #include "VeyonServerInterface.h"
@@ -44,15 +42,15 @@ WebFilterFeaturePlugin::WebFilterFeaturePlugin(QObject* parent) :
 					   Feature::Flag::Action | Feature::Flag::AllComponents,
 					   Feature::Uid(QStringLiteral("a1f0c3d2-8e47-4b19-9c6a-2d5e7f81b430")),
 					   m_webFilterFeature.uid(),
-					   tr("封鎖不良網站 (Block websites)"), {},
-					   tr("Block the built-in proxy list, extra school proxies, and the bad-website list."),
+					   tr("封鎖黑名單網站"), {},
+					   tr("Block the built-in proxy list, extra school proxies, and the blacklist."),
 					   QStringLiteral(":/webfilter/web-filter-block.png")),
 	m_whitelistFeature(QStringLiteral("WebFilterWhitelist"),
 					   Feature::Flag::Action | Feature::Flag::AllComponents,
 					   Feature::Uid(QStringLiteral("b2e1d4c3-9f58-4c2a-8d7b-3e6f8092c541")),
 					   m_webFilterFeature.uid(),
-					   tr("只准課堂網站 (Classroom sites only)"), {},
-					   tr("Allow only the configured classroom websites. Veyon stays allowed. "
+					   tr("只允許白名單網站"), {},
+					   tr("Allow only the configured whitelist websites. Veyon stays allowed. "
 						  "This does not stay active after the student computer restarts."),
 					   QStringLiteral(":/webfilter/web-filter-allow.png")),
 	m_restoreFeature(QStringLiteral("WebFilterRestore"),
@@ -124,23 +122,7 @@ QStringList WebFilterFeaturePlugin::configuredExtraProxyDomains() const
 void WebFilterFeaturePlugin::startServiceHelper()
 {
 #ifdef Q_OS_WIN
-	// Reinstalls can leave Server running while Windows Firewall still
-	// blocks TCP 11100, especially on Wi-Fi/Public profiles. Re-apply here
-	// so Master can reach the student without opening Configurator.
-	if (VeyonCore::config().isFirewallExceptionEnabled())
-	{
-		auto& network = VeyonCore::platform().networkFunctions();
-		if (network.configureFirewallException(VeyonCore::filesystem().serverFilePath(),
-											   QStringLiteral("Veyon Server"), true) == false)
-		{
-			vWarning() << "failed to restore Veyon Server firewall exception";
-		}
-		if (network.configureFirewallException(VeyonCore::filesystem().workerFilePath(),
-											   QStringLiteral("Veyon Worker"), true) == false)
-		{
-			vWarning() << "failed to restore Veyon Worker firewall exception";
-		}
-	}
+	WebFilterEngine::ensureClassroomFirewall();
 	if (m_ipcServer == nullptr)
 	{
 		m_ipcServer = new WindowsWebFilterIpcServer(this);
@@ -153,22 +135,31 @@ void WebFilterFeaturePlugin::startServiceHelper()
 
 
 
-void WebFilterFeaturePlugin::syncOverlayWorker(VeyonServerInterface& server)
+void WebFilterFeaturePlugin::showOverlayWorker(VeyonServerInterface& server,
+											  PersistentWebFilterState::Mode mode)
 {
-	const auto mode = PersistentWebFilterState::mode();
 	if (mode == PersistentWebFilterState::Mode::Off)
 	{
-		if (server.featureWorkerManager().isWorkerRunning(m_webFilterFeature.uid()))
-		{
-			server.featureWorkerManager().sendMessageToManagedSystemWorker(
-						FeatureMessage{m_webFilterFeature.uid(), FeatureCommand::HideStatus});
-		}
+		hideOverlayWorker(server);
 		return;
 	}
 
 	server.featureWorkerManager().sendMessageToManagedSystemWorker(
 				FeatureMessage{m_webFilterFeature.uid(), FeatureCommand::ShowStatus}
 				.addArgument(Argument::Mode, int(mode)));
+}
+
+
+
+void WebFilterFeaturePlugin::hideOverlayWorker(VeyonServerInterface& server)
+{
+	auto& manager = server.featureWorkerManager();
+	if (manager.isWorkerRunning(m_webFilterFeature.uid()))
+	{
+		manager.sendMessageToManagedSystemWorker(
+					FeatureMessage{m_webFilterFeature.uid(), FeatureCommand::HideStatus});
+	}
+	manager.stopWorker(m_webFilterFeature.uid());
 }
 
 
@@ -185,7 +176,7 @@ void WebFilterFeaturePlugin::restoreOverlayWorker()
 		return;
 	}
 
-	syncOverlayWorker(*m_server);
+	showOverlayWorker(*m_server, PersistentWebFilterState::mode());
 	if (m_server->featureWorkerManager().isWorkerRunning(m_webFilterFeature.uid()) == false)
 	{
 		QTimer::singleShot(2000, this, &WebFilterFeaturePlugin::restoreOverlayWorker);
@@ -282,8 +273,8 @@ bool WebFilterFeaturePlugin::startFeature(VeyonMasterInterface& master, const Fe
 	if (feature.uid() == m_blacklistFeature.uid())
 	{
 		if (QMessageBox::question(master.mainWindow(),
-								  tr("封鎖不良網站"),
-								  tr("將封鎖內建代理站、學校新增的代理站，以及 Configurator 裡的不良網站。\n"
+								  tr("封鎖黑名單網站"),
+								  tr("將封鎖內建代理站、學校新增的代理站，以及 Configurator 裡的黑名單網站。\n"
 									 "Veyon 通訊不受影響。是否套用到已選電腦？"))
 			!= QMessageBox::Yes)
 		{
@@ -293,8 +284,8 @@ bool WebFilterFeaturePlugin::startFeature(VeyonMasterInterface& master, const Fe
 	else if (feature.uid() == m_whitelistFeature.uid())
 	{
 		if (QMessageBox::question(master.mainWindow(),
-								  tr("只准課堂網站"),
-								  tr("學生將只能開啟 Configurator 裡的課堂網站。\n"
+								  tr("只允許白名單網站"),
+								  tr("學生將只能開啟 Configurator 裡的白名單網站。\n"
 									 "Veyon 通訊維持可通。重開機後此限制會自動解除。\n"
 									 "是否套用到已選電腦？"))
 			!= QMessageBox::Yes)
@@ -329,21 +320,21 @@ bool WebFilterFeaturePlugin::handleFeatureMessage(VeyonServerInterface& server,
 		{
 			vWarning() << "failed to apply web blacklist";
 		}
-		syncOverlayWorker(server);
+		showOverlayWorker(server, PersistentWebFilterState::Mode::Blacklist);
 		return true;
 	case FeatureCommand::ApplyWhitelist:
 		if (WindowsWebFilterIpcClient::request(WindowsWebFilterIpcClient::Command::Whitelist, domains, extra) == false)
 		{
 			vWarning() << "failed to apply web whitelist";
 		}
-		syncOverlayWorker(server);
+		showOverlayWorker(server, PersistentWebFilterState::Mode::Whitelist);
 		return true;
 	case FeatureCommand::Restore:
 		if (WindowsWebFilterIpcClient::request(WindowsWebFilterIpcClient::Command::Restore) == false)
 		{
 			vWarning() << "failed to restore web filter";
 		}
-		syncOverlayWorker(server);
+		hideOverlayWorker(server);
 		return true;
 	case FeatureCommand::ShowStatus:
 	case FeatureCommand::HideStatus:
@@ -372,20 +363,29 @@ bool WebFilterFeaturePlugin::handleFeatureMessage(VeyonWorkerInterface& worker, 
 	{
 	case FeatureCommand::ShowStatus:
 	{
-		const auto mode = PersistentWebFilterState::Mode(
+		auto mode = PersistentWebFilterState::Mode(
 				message.argument(Argument::Mode).toInt());
+		if (mode == PersistentWebFilterState::Mode::Off)
+		{
+			mode = PersistentWebFilterState::mode();
+		}
+		if (mode == PersistentWebFilterState::Mode::Off)
+		{
+			delete m_statusOverlay;
+			m_statusOverlay = nullptr;
+			return true;
+		}
 		if (m_statusOverlay == nullptr)
 		{
 			m_statusOverlay = new WebFilterStatusOverlay;
 		}
-		m_statusOverlay->setMode(mode == PersistentWebFilterState::Mode::Off
-								 ? PersistentWebFilterState::mode()
-								 : mode);
+		m_statusOverlay->setMode(mode);
 		return true;
 	}
 	case FeatureCommand::HideStatus:
 		delete m_statusOverlay;
 		m_statusOverlay = nullptr;
+		QTimer::singleShot(0, []() { QCoreApplication::quit(); });
 		return true;
 	case FeatureCommand::ApplyBlacklist:
 	case FeatureCommand::ApplyWhitelist:

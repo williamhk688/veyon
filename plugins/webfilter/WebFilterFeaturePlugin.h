@@ -10,6 +10,7 @@
 
 #include "ConfigurationPagePluginInterface.h"
 #include "FeatureProviderInterface.h"
+#include "PersistentWebFilterState.h"
 #include "WebFilterConfiguration.h"
 
 #ifdef Q_OS_WIN
@@ -44,7 +45,7 @@ public:
 
 	QVersionNumber version() const override
 	{
-		return QVersionNumber(1, 5);
+		return QVersionNumber(1, 6);
 	}
 
 	QString name() const override
@@ -101,7 +102,8 @@ private:
 	};
 
 	void startServiceHelper();
-	void syncOverlayWorker(VeyonServerInterface& server);
+	void showOverlayWorker(VeyonServerInterface& server, PersistentWebFilterState::Mode mode);
+	void hideOverlayWorker(VeyonServerInterface& server);
 	void restoreOverlayWorker();
 	QStringList configuredBlockedDomains() const;
 	QStringList configuredAllowedDomains() const;

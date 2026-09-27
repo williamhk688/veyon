@@ -18,7 +18,9 @@
 #include <QJsonObject>
 #include <QThread>
 
+#include "Filesystem.h"
 #include "PersistentWebFilterState.h"
+#include "VeyonConfiguration.h"
 #include "VeyonCore.h"
 #include "WebFilterEngine.h"
 #include "WebFilterLists.h"
@@ -30,24 +32,30 @@ struct BrowserPolicy
 {
 	const wchar_t* blocklist;
 	const wchar_t* allowlist;
+	const wchar_t* allowlistLegacy;
 	const wchar_t* root;
 };
 
 constexpr BrowserPolicy BrowserPolicies[] = {
 	{ L"SOFTWARE\\Policies\\Google\\Chrome\\URLBlocklist",
 	  L"SOFTWARE\\Policies\\Google\\Chrome\\URLAllowlist",
+	  L"SOFTWARE\\Policies\\Google\\Chrome\\URLWhitelist",
 	  L"SOFTWARE\\Policies\\Google\\Chrome" },
 	{ L"SOFTWARE\\Policies\\Microsoft\\Edge\\URLBlocklist",
 	  L"SOFTWARE\\Policies\\Microsoft\\Edge\\URLAllowlist",
+	  L"SOFTWARE\\Policies\\Microsoft\\Edge\\URLWhitelist",
 	  L"SOFTWARE\\Policies\\Microsoft\\Edge" },
 	{ L"SOFTWARE\\Policies\\BraveSoftware\\Brave\\URLBlocklist",
 	  L"SOFTWARE\\Policies\\BraveSoftware\\Brave\\URLAllowlist",
+	  L"SOFTWARE\\Policies\\BraveSoftware\\Brave\\URLWhitelist",
 	  L"SOFTWARE\\Policies\\BraveSoftware\\Brave" },
 	{ L"SOFTWARE\\Policies\\Chromium\\URLBlocklist",
 	  L"SOFTWARE\\Policies\\Chromium\\URLAllowlist",
+	  L"SOFTWARE\\Policies\\Chromium\\URLWhitelist",
 	  L"SOFTWARE\\Policies\\Chromium" },
 	{ L"SOFTWARE\\Policies\\Vivaldi\\URLBlocklist",
 	  L"SOFTWARE\\Policies\\Vivaldi\\URLAllowlist",
+	  L"SOFTWARE\\Policies\\Vivaldi\\URLWhitelist",
 	  L"SOFTWARE\\Policies\\Vivaldi" },
 };
 
@@ -542,6 +550,7 @@ QString capturePolicySnapshot()
 		QJsonObject item;
 		item.insert(QStringLiteral("block"), readPolicyValues(browser.blocklist));
 		item.insert(QStringLiteral("allow"), readPolicyValues(browser.allowlist));
+		item.insert(QStringLiteral("allowLegacy"), readPolicyValues(browser.allowlistLegacy));
 		item.insert(QStringLiteral("doh"), readPolicyString(browser.root, DnsOverHttpsMode));
 		browsers.append(item);
 	}
@@ -573,6 +582,7 @@ bool restorePolicySnapshot(const QString& snapshot)
 			const auto item = i < browsers.size() ? browsers.at(i).toObject() : QJsonObject();
 			ok = writePolicyObject(BrowserPolicies[i].blocklist, item.value(QStringLiteral("block")).toObject()) && ok;
 			ok = writePolicyObject(BrowserPolicies[i].allowlist, item.value(QStringLiteral("allow")).toObject()) && ok;
+			ok = writePolicyObject(BrowserPolicies[i].allowlistLegacy, item.value(QStringLiteral("allowLegacy")).toObject()) && ok;
 			ok = writePolicyString(BrowserPolicies[i].root, DnsOverHttpsMode,
 								   item.value(QStringLiteral("doh")).toString()) && ok;
 		}
@@ -620,6 +630,7 @@ bool applyChromiumLists(const QStringList& block, const QStringList& allow)
 	{
 		ok = writePolicyValues(browser.blocklist, block) && ok;
 		ok = writePolicyValues(browser.allowlist, allow) && ok;
+		ok = writePolicyValues(browser.allowlistLegacy, allow) && ok;
 		ok = writePolicyString(browser.root, DnsOverHttpsMode, QStringLiteral("off")) && ok;
 	}
 	return ok;
@@ -662,6 +673,7 @@ bool restoreAll(bool restartBrowsers)
 		{
 			policyOk = deletePolicyValues(browser.blocklist) && policyOk;
 			policyOk = deletePolicyValues(browser.allowlist) && policyOk;
+			policyOk = deletePolicyValues(browser.allowlistLegacy) && policyOk;
 			policyOk = writePolicyString(browser.root, DnsOverHttpsMode, {}) && policyOk;
 		}
 		policyOk = deletePolicyValues(FirefoxBlockKey) && policyOk;
@@ -740,6 +752,7 @@ bool WebFilterEngine::restore(bool restartBrowsers)
 
 bool WebFilterEngine::reconcileOnServiceStart()
 {
+	ensureClassroomFirewall();
 	clearSystemPac();
 
 	const auto mode = PersistentWebFilterState::mode();
@@ -770,4 +783,43 @@ bool WebFilterEngine::reconcileOnServiceStart()
 	}
 
 	return true;
+}
+
+void WebFilterEngine::ensureClassroomFirewall()
+{
+	if (VeyonCore::config().isFirewallExceptionEnabled() == false)
+	{
+		return;
+	}
+
+	const auto port = VeyonCore::config().veyonServerPort();
+	const auto server = QDir::toNativeSeparators(VeyonCore::filesystem().serverFilePath());
+	const auto worker = QDir::toNativeSeparators(VeyonCore::filesystem().workerFilePath());
+
+	const auto replaceRule = [](const QString& name, const QString& spec) {
+		runHiddenCommand(QStringLiteral("netsh advfirewall firewall delete rule name=\"%1\"").arg(name));
+		runHiddenCommand(QStringLiteral("netsh advfirewall firewall add rule name=\"%1\" %2").arg(name, spec));
+	};
+
+	// Port + ICMP rules survive "block all incoming apps" better than an
+	// application rule alone. Do not use the remove-all-then-add helper that
+	// can leave TCP 11100 closed if COM add fails.
+	replaceRule(QStringLiteral("CYC Veyon Server Port"),
+				QStringLiteral("dir=in action=allow protocol=TCP localport=%1 profile=any enable=yes").arg(port));
+	replaceRule(QStringLiteral("CYC Veyon ICMP Echo"),
+				QStringLiteral("dir=in action=allow protocol=icmpv4:8,any profile=any enable=yes"));
+	if (server.isEmpty() == false)
+	{
+		replaceRule(QStringLiteral("CYC Veyon Server App"),
+					QStringLiteral("dir=in action=allow program=\"%1\" protocol=TCP profile=any enable=yes").arg(server));
+	}
+	if (worker.isEmpty() == false)
+	{
+		replaceRule(QStringLiteral("CYC Veyon Worker App"),
+					QStringLiteral("dir=in action=allow program=\"%1\" protocol=TCP profile=any enable=yes").arg(worker));
+	}
+
+	// blockinboundalways ignores allow rules. Restore normal exception policy.
+	runHiddenCommand(QStringLiteral("netsh advfirewall set allprofiles firewallpolicy blockinbound,allowoutbound"));
+	vInfo() << "ensured classroom firewall rules for port" << port;
 }

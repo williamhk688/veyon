@@ -19,4 +19,5 @@ public:
 							  bool restartBrowsers = true);
 	static bool restore(bool restartBrowsers = true);
 	static bool reconcileOnServiceStart();
+	static void ensureClassroomFirewall();
 };

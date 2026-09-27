@@ -68,6 +68,17 @@ private slots:
 		}
 	}
 
+	void whitelistAllowPatternsIncludeScheme()
+	{
+		const auto patterns = WebFilterLists::browserAllowPatterns({QStringLiteral("classroom.google.com")});
+		QVERIFY(patterns.contains(QStringLiteral("classroom.google.com")));
+		QVERIFY(patterns.contains(QStringLiteral(".classroom.google.com")));
+		QVERIFY(patterns.contains(QStringLiteral("https://classroom.google.com")));
+		QVERIFY(patterns.contains(QStringLiteral("https://.classroom.google.com")));
+		QVERIFY(patterns.contains(QStringLiteral("http://classroom.google.com")));
+		QVERIFY(patterns.contains(QStringLiteral("chrome://")));
+	}
+
 	void whitelistPacAllowsListedHost()
 	{
 		const auto pac = WebFilterLists::proxyPacScript(

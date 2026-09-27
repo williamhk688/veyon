@@ -22,14 +22,14 @@
       <bool>true</bool>
      </property>
      <property name="text">
-      <string>工具列「網絡管制」可選封鎖不良網站、只准課堂網站或恢復網絡。內建代理站不能刪；可用下面按鈕新增學校自己的代理站。Google 翻譯不會寫死封鎖。Veyon 通訊永遠可通。</string>
+      <string>工具列「網絡管制」可選封鎖黑名單網站、只允許白名單網站或恢復網絡。內建代理站不能刪；可用下面按鈕新增學校自己的代理站。Google 翻譯不會寫死封鎖。Veyon 通訊永遠可通。</string>
      </property>
     </widget>
    </item>
    <item>
     <widget class="QGroupBox" name="blockedGroup">
      <property name="title">
-      <string>不良網站（可改）</string>
+      <string>黑名單網站（可改）</string>
      </property>
      <layout class="QVBoxLayout" name="blockedLayout">
       <item>
@@ -66,7 +66,7 @@
    <item>
     <widget class="QGroupBox" name="allowedGroup">
      <property name="title">
-      <string>課堂網站（可改）</string>
+      <string>白名單網站（可改）</string>
      </property>
      <layout class="QVBoxLayout" name="allowedLayout">
       <item>
