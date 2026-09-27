@@ -354,38 +354,70 @@ QString pacFilePath()
 	return veyonProgramDataDir() + QStringLiteral("/webfilter.pac");
 }
 
-QString pacFileUrl()
-{
-	return QStringLiteral("file:///") + pacFilePath();
-}
-
 void notifyProxySettingsChanged()
 {
 	InternetSetOptionW(nullptr, INTERNET_OPTION_SETTINGS_CHANGED, nullptr, 0);
 	InternetSetOptionW(nullptr, INTERNET_OPTION_REFRESH, nullptr, 0);
 }
 
-bool writePacFile(const QString& script)
-{
-	const auto dir = veyonProgramDataDir();
-	if (QDir().mkpath(dir) == false)
-	{
-		return false;
-	}
-	QFile file(pacFilePath());
-	if (file.open(QIODevice::WriteOnly | QIODevice::Truncate) == false)
-	{
-		vWarning() << "can't write PAC file" << file.errorString();
-		return false;
-	}
-	const auto utf8 = script.toUtf8();
-	return file.write(utf8) == utf8.size();
-}
-
 bool removePacFile()
 {
 	const auto path = pacFilePath();
 	return QFile::exists(path) == false || QFile::remove(path);
+}
+
+bool deletePolicyValue(const wchar_t* keyPath, const wchar_t* valueName)
+{
+	HKEY key = nullptr;
+	if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, keyPath, 0,
+					  KEY_READ | KEY_WRITE | KEY_WOW64_64KEY, &key) != ERROR_SUCCESS)
+	{
+		return true;
+	}
+
+	const auto status = RegDeleteValueW(key, valueName);
+	RegCloseKey(key);
+	return status == ERROR_SUCCESS || status == ERROR_FILE_NOT_FOUND;
+}
+
+bool isVeyonPacUrl(const QString& url)
+{
+	return url.contains(QLatin1String("webfilter.pac"), Qt::CaseInsensitive);
+}
+
+bool leftoverSystemPacPresent()
+{
+	if (QFile::exists(pacFilePath()))
+	{
+		return true;
+	}
+
+	return isVeyonPacUrl(readPolicyString(InternetSettingsPolicyKey, AutoConfigValue)) ||
+		   isVeyonPacUrl(readPolicyString(InternetSettingsKey, AutoConfigValue));
+}
+
+// Never install a machine-wide PAC. WinINet/AutoConfigURL can send Veyon
+// hostnames through PROXY 127.0.0.1:9 and Master then cannot connect.
+bool clearSystemPac()
+{
+	const auto policyUrl = readPolicyString(InternetSettingsPolicyKey, AutoConfigValue);
+	const auto userUrl = readPolicyString(InternetSettingsKey, AutoConfigValue);
+	const auto ours = leftoverSystemPacPresent();
+	bool ok = removePacFile();
+	if (isVeyonPacUrl(policyUrl))
+	{
+		ok = writePolicyString(InternetSettingsPolicyKey, AutoConfigValue, {}) && ok;
+	}
+	if (isVeyonPacUrl(userUrl))
+	{
+		ok = writePolicyString(InternetSettingsKey, AutoConfigValue, {}) && ok;
+	}
+	if (ours)
+	{
+		ok = deletePolicyValue(InternetSettingsPolicyKey, ProxySettingsPerUserValue) && ok;
+	}
+	notifyProxySettingsChanged();
+	return ok;
 }
 
 bool writePolicyObject(const wchar_t* keyPath, const QJsonObject& values)
@@ -526,19 +558,6 @@ bool applyFirefoxLists(const QStringList& block, const QStringList& allow)
 		   writePolicyDword(FirefoxDohKey, L"Enabled", 0);
 }
 
-bool applySystemPac(bool whitelistMode, const QStringList& domains, const QStringList& extraProxies)
-{
-	const auto script = WebFilterLists::proxyPacScript(whitelistMode, domains, extraProxies);
-	if (writePacFile(script) == false)
-	{
-		return false;
-	}
-	const auto url = pacFileUrl();
-	return writePolicyDword(InternetSettingsPolicyKey, ProxySettingsPerUserValue, 0) &&
-		   writePolicyString(InternetSettingsPolicyKey, AutoConfigValue, url) &&
-		   writePolicyString(InternetSettingsKey, AutoConfigValue, url);
-}
-
 bool applyBrowserBlacklist(const QStringList& domains)
 {
 	const auto patterns = WebFilterLists::chromePolicyPatterns(domains);
@@ -561,7 +580,7 @@ bool restoreAll()
 {
 	const auto snapshot = PersistentWebFilterState::policySnapshot();
 	const auto hostsOk = updateHosts({});
-	const auto pacOk = removePacFile();
+	const auto pacOk = clearSystemPac();
 	bool policyOk = true;
 	if (snapshot.isEmpty())
 	{
@@ -596,7 +615,7 @@ bool WebFilterEngine::applyBlacklist(const QStringList& schoolBlocked, const QSt
 	}
 	if (updateHosts(domains) == false ||
 		applyBrowserBlacklist(domains) == false ||
-		applySystemPac(false, schoolBlocked, extraProxies) == false)
+		clearSystemPac() == false)
 	{
 		return false;
 	}
@@ -618,7 +637,7 @@ bool WebFilterEngine::applyWhitelist(const QStringList& schoolAllowed, const QSt
 							WebFilterLists::normalizeDomains(extraProxies);
 	if (updateHosts(proxyHosts) == false ||
 		applyBrowserWhitelist(allowed) == false ||
-		applySystemPac(true, allowed, extraProxies) == false)
+		clearSystemPac() == false)
 	{
 		return false;
 	}
@@ -655,6 +674,12 @@ bool WebFilterEngine::reconcileOnServiceStart()
 	{
 		vInfo() << "clearing leftover web filter artifacts";
 		return restore();
+	}
+
+	if (leftoverSystemPacPresent())
+	{
+		vInfo() << "clearing leftover system PAC so Veyon can connect";
+		return clearSystemPac();
 	}
 
 	return true;

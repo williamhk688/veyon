@@ -6,6 +6,7 @@
  * This file is part of Veyon - https://veyon.io
  */
 
+#include <QGuiApplication>
 #include <QMessageBox>
 
 #include "ComputerControlInterface.h"
@@ -63,7 +64,10 @@ WebFilterFeaturePlugin::WebFilterFeaturePlugin(QObject* parent) :
 	}
 	if (VeyonCore::component() == VeyonCore::Component::Server)
 	{
-		startStatusOverlay();
+		// Overlay is a QWindow and needs the event loop. Creating it during
+		// plugin load used to crash veyon-server (QWidget + QGuiApplication).
+		connect(VeyonCore::instance(), &VeyonCore::applicationLoaded,
+				this, &WebFilterFeaturePlugin::startStatusOverlay);
 	}
 }
 
@@ -133,6 +137,10 @@ void WebFilterFeaturePlugin::startServiceHelper()
 
 void WebFilterFeaturePlugin::startStatusOverlay()
 {
+	if (QGuiApplication::instance() == nullptr)
+	{
+		return;
+	}
 	if (m_statusOverlay == nullptr)
 	{
 		m_statusOverlay = new WebFilterStatusOverlay;
