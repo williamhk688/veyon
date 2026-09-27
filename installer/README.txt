@@ -24,8 +24,13 @@ Emergency Unlock & Recover (緊急解鎖與自救) is the last toolbar item
 
 Ctrl+Alt+Shift+U still uses the failsafe password and also clears a
 temporary web filter. The same session is not reapplied after that
-hotkey; a new teacher session still applies. The handbook documents
-this hotkey path for lock, demo, and blacklist/whitelist.
+hotkey; a new teacher session still applies. After a successful
+hotkey unlock the Windows service releases Interception so the
+keyboard works without waiting for Master Unlock / Stop Demo.
+
+Lock, demo, and web-filter flags are written to HKLM
+(VeyonScreenLock / VeyonDemo / VeyonWebFilter) and flushed to disk
+so a reboot keeps the restriction.
 
 Install this package on both the teacher PC and every student PC,
 then restart Veyon Service.
@@ -34,8 +39,8 @@ Direct download:
 
   https://github.com/williamhk688/veyon/raw/feature/web-filter-session/installer/veyon_4_11_2_win64_modified_setup.exe
 
-Source: ac348336
+Source: b0603a4c
 Branch: feature/web-filter-session
 
 SHA-256:
-  f7f44b42c43ea5d45b12550d57730fda40107b34d38404ce4ce9f9780bccd868
+  a6303736e3deeef8a33208bbde2bc9173ebda694a21990a144c56fd77868f2ff
