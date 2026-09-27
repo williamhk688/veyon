@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include <QElapsedTimer>
 #include <QWidget>
 
 #include "PersistentWebFilterState.h"
@@ -22,6 +23,10 @@ public:
 
 	void syncFromState();
 	void setMode(PersistentWebFilterState::Mode mode);
+	void setRemainingMs(qint64 remainingMs, qint64 expiresAtMs);
+
+Q_SIGNALS:
+	void failsafeUnlocked();
 
 protected:
 	void paintEvent(QPaintEvent* event) override;
@@ -29,6 +34,12 @@ protected:
 
 private:
 	void reposition();
+	void promptFailsafeUnlock();
+	void refreshTooltip();
 
 	PersistentWebFilterState::Mode m_mode = PersistentWebFilterState::Mode::Off;
+	qint64 m_remainingMs = 0;
+	qint64 m_expiresAtMs = 0;
+	QElapsedTimer m_elapsed;
+	bool m_failsafePromptOpen = false;
 };

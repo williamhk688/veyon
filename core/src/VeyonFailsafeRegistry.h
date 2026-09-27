@@ -40,3 +40,4 @@
 inline constexpr wchar_t VeyonFailsafeRegistryKey[] =
 	L"SOFTWARE\\Veyon Solutions\\VeyonFailsafe";
 inline constexpr wchar_t VeyonFailsafePasswordValue[] = L"FailsafePassword";
+inline constexpr wchar_t VeyonFailsafeEmergencyUnlockValue[] = L"EmergencyUnlock";

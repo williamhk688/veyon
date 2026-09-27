@@ -6,13 +6,22 @@
  * This file is part of Veyon - https://veyon.io
  */
 
+#include <algorithm>
+
 #include <QGuiApplication>
 #include <QPainter>
 #include <QPixmap>
 #include <QScreen>
+#include <QShortcut>
 #include <QShowEvent>
+#include <QTimer>
 
+#include "FailsafeUnlock.h"
 #include "WebFilterStatusOverlay.h"
+
+#ifdef Q_OS_WIN
+#include <windows.h>
+#endif
 
 static constexpr int OverlaySize = 56;
 static constexpr int OverlayMargin = 16;
@@ -24,6 +33,11 @@ WebFilterStatusOverlay::WebFilterStatusOverlay(QWidget* parent) :
 	setAttribute(Qt::WA_TranslucentBackground);
 	setAttribute(Qt::WA_TransparentForMouseEvents);
 	setFixedSize(OverlaySize, OverlaySize);
+	auto* shortcut = new QShortcut(QKeySequence(QLatin1String(FailsafeUnlock::HotkeySequence)), this);
+	shortcut->setContext(Qt::ApplicationShortcut);
+	connect(shortcut, &QShortcut::activated, this, &WebFilterStatusOverlay::promptFailsafeUnlock);
+	connect(&FailsafeHotkeyMonitor::instance(), &FailsafeHotkeyMonitor::hotkeyPressed,
+			this, &WebFilterStatusOverlay::promptFailsafeUnlock);
 	hide();
 }
 
@@ -41,19 +55,54 @@ void WebFilterStatusOverlay::setMode(PersistentWebFilterState::Mode mode)
 		return;
 	}
 
-	if (m_mode == PersistentWebFilterState::Mode::Blacklist)
-	{
-		setToolTip(tr("網絡管制：正在封鎖黑名單網站 (Blocking blacklist sites)"));
-	}
-	else
-	{
-		setToolTip(tr("網絡管制：只允許白名單網站 (Allowing whitelist sites only)"));
-	}
-
+	refreshTooltip();
 	reposition();
 	show();
 	raise();
+#ifdef Q_OS_WIN
+	RegisterHotKey(HWND(winId()), 1, MOD_CONTROL | MOD_ALT | MOD_SHIFT, 'U');
+#endif
 	update();
+}
+
+void WebFilterStatusOverlay::setRemainingMs(qint64 remainingMs, qint64 expiresAtMs)
+{
+	m_remainingMs = remainingMs;
+	m_expiresAtMs = expiresAtMs;
+	m_elapsed.restart();
+	refreshTooltip();
+	QTimer::singleShot(30000, this, &WebFilterStatusOverlay::refreshTooltip);
+}
+
+void WebFilterStatusOverlay::refreshTooltip()
+{
+	if (m_mode == PersistentWebFilterState::Mode::Off)
+	{
+		return;
+	}
+
+	const auto remaining = std::max<qint64>(0, m_remainingMs - m_elapsed.elapsed());
+	const auto minutes = (remaining + 59999) / 60000;
+	const auto modeText = m_mode == PersistentWebFilterState::Mode::Blacklist
+			? tr("網絡管制：正在封鎖黑名單網站 (Web access restricted by teacher)")
+			: tr("網絡管制：只允許白名單網站 (Web access restricted by teacher)");
+	setToolTip(tr("%1\n剩餘約 %2 分鐘 (Remaining: %2 minutes)").arg(modeText).arg(minutes));
+}
+
+void WebFilterStatusOverlay::promptFailsafeUnlock()
+{
+	if (m_failsafePromptOpen || m_mode == PersistentWebFilterState::Mode::Off)
+	{
+		return;
+	}
+
+	m_failsafePromptOpen = true;
+	if (FailsafeUnlock::prompt(this))
+	{
+		Q_EMIT failsafeUnlocked();
+		return;
+	}
+	m_failsafePromptOpen = false;
 }
 
 void WebFilterStatusOverlay::paintEvent(QPaintEvent*)

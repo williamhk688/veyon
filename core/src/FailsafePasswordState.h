@@ -67,4 +67,7 @@ public:
 	 * Windows service registry watch re-enables input after a local unlock.
 	 */
 	static bool clearPersistedInputLocks();
+
+	static bool noteEmergencyUnlockSucceeded();
+	static bool consumeEmergencyUnlockSucceeded();
 };

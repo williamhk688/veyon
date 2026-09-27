@@ -198,6 +198,7 @@ bool FailsafeHotkeyMonitor::isUnlockHotkey(const QKeyEvent* event)
 bool FailsafeUnlock::prompt(QWidget* parent)
 {
 	static bool dialogOpen = false;
+	static int failureCount = 0;
 	if (dialogOpen)
 	{
 		return false;
@@ -225,6 +226,10 @@ bool FailsafeUnlock::prompt(QWidget* parent)
 
 	if (FailsafePasswordState::passwordMatches(entered) == false)
 	{
+		++failureCount;
+		vWarning() << "Emergency unlock authentication failed";
+		const auto delayMs = qMin(failureCount * 500, 3000);
+		QThread::msleep(uint(delayMs));
 		QMessageBox::warning(parent,
 							 QCoreApplication::translate("FailsafeUnlock", "Unlock"),
 							 QCoreApplication::translate("FailsafeUnlock", "The password is incorrect."));
@@ -233,9 +238,11 @@ bool FailsafeUnlock::prompt(QWidget* parent)
 		return false;
 	}
 
+	failureCount = 0;
 	FailsafePasswordState::clearPersistedInputLocks();
+	FailsafePasswordState::noteEmergencyUnlockSucceeded();
 	FailsafeHotkeyMonitor::instance().setPasswordPromptActive(false);
 	dialogOpen = false;
-	vInfo() << "failsafe unlock succeeded";
+	vInfo() << "Emergency unlock successful";
 	return true;
 }
