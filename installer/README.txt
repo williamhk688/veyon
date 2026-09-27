@@ -50,8 +50,8 @@ Direct download:
 
   https://github.com/williamhk688/veyon/raw/feature/web-filter-session/installer/veyon_4_11_2_win64_modified_setup.exe
 
-Source: ec4f3166
+Source: f3bc4968
 Branch: feature/web-filter-session
 
 SHA-256:
-  cbb52a941c9e13bfa5d626e0b2fe4e3cddbde4c37d34181a2d34c48ef6d03e71
+  868e04b782869aa7be8969a327214e27ac201f940dbc2bad3d05afa261a1bf7f
