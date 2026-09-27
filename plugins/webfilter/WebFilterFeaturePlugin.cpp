@@ -70,8 +70,16 @@ WebFilterFeaturePlugin::WebFilterFeaturePlugin(QObject* parent) :
 					 tr("恢復網絡 (Restore web)"), {},
 					 tr("Remove the classroom web filter from the selected computers."),
 					 QStringLiteral(":/webfilter/web-filter-restore.png")),
-	m_features({ m_webFilterFeature, m_blacklistFeature, m_whitelistFeature, m_restoreFeature })
+	m_viewStatusFeature(QStringLiteral("WebFilterViewStatus"),
+						Feature::Flag::Action | Feature::Flag::Master,
+						Feature::Uid(QStringLiteral("e5a4b7c6-3d9c-4e6e-91bf-7c0324d6a985")),
+						m_webFilterFeature.uid(),
+						tr("查看剩餘時間 (View remaining time)"), {},
+						tr("Open the current web-filter session remaining time. "
+						   "This item is only shown while a session is active."),
+						QStringLiteral(":/webfilter/web-filter.png"))
 {
+	rebuildFeatureList();
 	if (VeyonCore::component() == VeyonCore::Component::Service)
 	{
 		// Only start the IPC thread here. Reconcile/PAC cleanup runs inside
@@ -202,14 +210,51 @@ void WebFilterFeaturePlugin::startTeacherSession(const WebFilterSession& session
 	}
 	m_teacherExpireTimer->start(int(std::min<qint64>(session.durationMs, std::numeric_limits<int>::max())));
 	m_teacherTickTimer->start(int(WebFilterSessionPolicy::WatchdogIntervalMs));
+	refreshTeacherUi();
+}
+
+
+
+void WebFilterFeaturePlugin::rebuildFeatureList()
+{
+	m_features = { m_webFilterFeature, m_blacklistFeature, m_whitelistFeature, m_restoreFeature };
+	if (m_activeSession.isActive())
+	{
+		m_features.append(m_viewStatusFeature);
+	}
+}
+
+
+
+void WebFilterFeaturePlugin::refreshTeacherUi()
+{
+	rebuildFeatureList();
+	if (m_master)
+	{
+		m_master->reloadSubFeatures();
+	}
+}
+
+
+
+void WebFilterFeaturePlugin::showStatusDialog()
+{
+	if (m_master == nullptr || m_activeSession.isActive() == false)
+	{
+		return;
+	}
+
 	if (m_statusDialog == nullptr)
 	{
-		m_statusDialog = new WebFilterSessionStatusDialog(master.mainWindow());
+		m_statusDialog = new WebFilterSessionStatusDialog(m_master->mainWindow());
 		connect(m_statusDialog, &WebFilterSessionStatusDialog::restoreRequested, this, [this]() {
 			stopTeacherSession(WebFilterSession::StopReason::TeacherManual);
 		});
 	}
-	m_statusDialog->setSession(session);
+	m_statusDialog->setSession(m_activeSession);
+	m_statusDialog->show();
+	m_statusDialog->raise();
+	m_statusDialog->activateWindow();
 }
 
 
@@ -235,6 +280,7 @@ void WebFilterFeaturePlugin::stopTeacherSession(WebFilterSession::StopReason rea
 	{
 		m_statusDialog->hide();
 	}
+	refreshTeacherUi();
 
 	if (m_master == nullptr)
 	{
@@ -276,7 +322,7 @@ void WebFilterFeaturePlugin::onTeacherTick()
 		return;
 	}
 
-	if (m_statusDialog)
+	if (m_statusDialog && m_statusDialog->isVisible())
 	{
 		m_statusDialog->setSession(m_activeSession);
 	}
@@ -451,7 +497,8 @@ bool WebFilterFeaturePlugin::controlFeature(Feature::Uid featureUid, Operation o
 		return false;
 	}
 
-	if (featureUid == m_webFilterFeature.uid())
+	if (featureUid == m_webFilterFeature.uid() ||
+		featureUid == m_viewStatusFeature.uid())
 	{
 		return true;
 	}
@@ -533,6 +580,13 @@ bool WebFilterFeaturePlugin::startFeature(VeyonMasterInterface& master, const Fe
 
 	if (feature.uid() == m_webFilterFeature.uid())
 	{
+		return true;
+	}
+
+	if (feature.uid() == m_viewStatusFeature.uid())
+	{
+		m_master = &master;
+		showStatusDialog();
 		return true;
 	}
 

@@ -55,7 +55,7 @@ public:
 
 	QVersionNumber version() const override
 	{
-		return QVersionNumber(1, 8);
+		return QVersionNumber(1, 9);
 	}
 
 	QString name() const override
@@ -129,6 +129,9 @@ private:
 								const ComputerControlInterfaceList& computerControlInterfaces);
 	void startTeacherSession(const WebFilterSession& session, VeyonMasterInterface& master);
 	void stopTeacherSession(WebFilterSession::StopReason reason);
+	void rebuildFeatureList();
+	void refreshTeacherUi();
+	void showStatusDialog();
 	void onTeacherTimerExpired();
 	void onTeacherTick();
 	qint64 configuredMaxTtlMs() const;
@@ -147,7 +150,8 @@ private:
 	const Feature m_blacklistFeature;
 	const Feature m_whitelistFeature;
 	const Feature m_restoreFeature;
-	const FeatureList m_features;
+	const Feature m_viewStatusFeature;
+	FeatureList m_features;
 	WebFilterStatusOverlay* m_statusOverlay = nullptr;
 	VeyonServerInterface* m_server = nullptr;
 #ifdef Q_OS_WIN

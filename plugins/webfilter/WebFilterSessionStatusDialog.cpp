@@ -59,8 +59,4 @@ void WebFilterSessionStatusDialog::refresh()
 	m_remaining->setText(QStringLiteral("%1:%2").arg(minutes, 2, 10, QLatin1Char('0'))
 						 .arg(seconds, 2, 10, QLatin1Char('0')));
 	m_endsAt->setText(QDateTime::fromMSecsSinceEpoch(m_session.expiresAtMs).toString(QStringLiteral("HH:mm")));
-	if (isVisible() == false)
-	{
-		show();
-	}
 }
