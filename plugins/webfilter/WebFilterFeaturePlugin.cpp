@@ -45,21 +45,21 @@ WebFilterFeaturePlugin::WebFilterFeaturePlugin(QObject* parent) :
 					   Feature::Flag::Action | Feature::Flag::AllComponents,
 					   Feature::Uid(QStringLiteral("d4e3f6c5-1b7a-4e4c-af9d-5a8102b4e763")),
 					   Feature::Uid(),
-					   tr("網絡管制 (Web filter)"), {},
+					   tr("Web filter (網絡管制)"), {},
 					   tr("Choose blacklist, classroom-only whitelist, or restore web access."),
 					   QStringLiteral(":/webfilter/web-filter.png")),
 	m_blacklistFeature(QStringLiteral("WebFilterBlacklist"),
 					   Feature::Flag::Action | Feature::Flag::AllComponents,
 					   Feature::Uid(QStringLiteral("a1f0c3d2-8e47-4b19-9c6a-2d5e7f81b430")),
 					   m_webFilterFeature.uid(),
-					   tr("封鎖黑名單網站 (Block blacklist sites)"), {},
+					   tr("Block blacklist sites (封鎖黑名單網站)"), {},
 					   tr("Block the built-in proxy list, extra school proxies, and the blacklist."),
 					   QStringLiteral(":/webfilter/web-filter-block.png")),
 	m_whitelistFeature(QStringLiteral("WebFilterWhitelist"),
 					   Feature::Flag::Action | Feature::Flag::AllComponents,
 					   Feature::Uid(QStringLiteral("b2e1d4c3-9f58-4c2a-8d7b-3e6f8092c541")),
 					   m_webFilterFeature.uid(),
-					   tr("只允許白名單網站 (Allow whitelist sites only)"), {},
+					   tr("Allow whitelist sites only (只允許白名單網站)"), {},
 					   tr("Allow only the configured whitelist websites. Veyon stays allowed. "
 						  "This does not stay active after the student computer restarts."),
 					   QStringLiteral(":/webfilter/web-filter-allow.png")),
@@ -67,14 +67,14 @@ WebFilterFeaturePlugin::WebFilterFeaturePlugin(QObject* parent) :
 					 Feature::Flag::Action | Feature::Flag::AllComponents,
 					 Feature::Uid(QStringLiteral("c3d2e5b4-0a69-4d3b-9e8c-4f7091a3d652")),
 					 m_webFilterFeature.uid(),
-					 tr("恢復網絡 (Restore web)"), {},
+					 tr("Restore web (恢復網絡)"), {},
 					 tr("Remove the classroom web filter from the selected computers."),
 					 QStringLiteral(":/webfilter/web-filter-restore.png")),
 	m_viewStatusFeature(QStringLiteral("WebFilterViewStatus"),
 						Feature::Flag::Action | Feature::Flag::Master,
 						Feature::Uid(QStringLiteral("e5a4b7c6-3d9c-4e6e-91bf-7c0324d6a985")),
 						m_webFilterFeature.uid(),
-						tr("查看剩餘時間 (View remaining time)"), {},
+						tr("View remaining time (查看剩餘時間)"), {},
 						tr("Open the current web-filter session remaining time. "
 						   "This item is only shown while a session is active."),
 						QStringLiteral(":/webfilter/web-filter.png"))
@@ -600,7 +600,7 @@ bool WebFilterFeaturePlugin::startFeature(VeyonMasterInterface& master, const Fe
 	if (computerControlInterfaces.isEmpty())
 	{
 		QMessageBox::information(master.mainWindow(),
-								 tr("網絡管制 (Web filter)"),
+								 tr("Web filter (網絡管制)"),
 								 tr("請先選取電腦。"));
 		return true;
 	}
@@ -608,7 +608,7 @@ bool WebFilterFeaturePlugin::startFeature(VeyonMasterInterface& master, const Fe
 	if (feature.uid() == m_blacklistFeature.uid())
 	{
 		if (QMessageBox::question(master.mainWindow(),
-								  tr("封鎖黑名單網站 (Block blacklist sites)"),
+								  tr("Block blacklist sites (封鎖黑名單網站)"),
 								  tr("將封鎖內建代理站、學校新增的代理站，以及 Configurator 裡的黑名單網站。\n"
 									 "Veyon 通訊不受影響。請接著選擇限制時長。"))
 			!= QMessageBox::Yes)
@@ -620,9 +620,9 @@ bool WebFilterFeaturePlugin::startFeature(VeyonMasterInterface& master, const Fe
 	if (feature.uid() == m_whitelistFeature.uid())
 	{
 		if (QMessageBox::question(master.mainWindow(),
-								  tr("只允許白名單網站 (Allow whitelist sites only)"),
+								  tr("Allow whitelist sites only (只允許白名單網站)"),
 								  tr("學生將只能開啟 Configurator 裡的白名單網站。\n"
-									 "Veyon 通訊維持可通。限制到期或按恢復網絡後解除，設定清單會保留。"))
+									 "Veyon 通訊維持可通。限制到期或按 Restore web (恢復網絡) 後解除，設定清單會保留。"))
 			!= QMessageBox::Yes)
 		{
 			return true;
@@ -661,7 +661,15 @@ bool WebFilterFeaturePlugin::handleFeatureMessage(VeyonServerInterface& server,
 		{
 			vWarning() << "failed to apply web blacklist";
 		}
-		showOverlayWorker(server, WebFilterSession::Mode::Blacklist);
+		if (PersistentWebFilterState::shouldIgnoreApply(session.sessionId) ||
+			PersistentWebFilterState::mode() != WebFilterSession::Mode::Blacklist)
+		{
+			hideOverlayWorker(server);
+		}
+		else
+		{
+			showOverlayWorker(server, WebFilterSession::Mode::Blacklist);
+		}
 		return true;
 	case FeatureCommand::ApplyWhitelist:
 		session.mode = WebFilterSession::Mode::Whitelist;
@@ -670,7 +678,15 @@ bool WebFilterFeaturePlugin::handleFeatureMessage(VeyonServerInterface& server,
 		{
 			vWarning() << "failed to apply web whitelist";
 		}
-		showOverlayWorker(server, WebFilterSession::Mode::Whitelist);
+		if (PersistentWebFilterState::shouldIgnoreApply(session.sessionId) ||
+			PersistentWebFilterState::mode() != WebFilterSession::Mode::Whitelist)
+		{
+			hideOverlayWorker(server);
+		}
+		else
+		{
+			showOverlayWorker(server, WebFilterSession::Mode::Whitelist);
+		}
 		return true;
 	case FeatureCommand::Restore:
 	case FeatureCommand::FailsafeUnlock:

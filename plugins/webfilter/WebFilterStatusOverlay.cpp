@@ -84,9 +84,9 @@ void WebFilterStatusOverlay::refreshTooltip()
 	const auto remaining = std::max<qint64>(0, m_remainingMs - m_elapsed.elapsed());
 	const auto minutes = (remaining + 59999) / 60000;
 	const auto modeText = m_mode == PersistentWebFilterState::Mode::Blacklist
-			? tr("網絡管制：正在封鎖黑名單網站 (Web access restricted by teacher)")
-			: tr("網絡管制：只允許白名單網站 (Web access restricted by teacher)");
-	setToolTip(tr("%1\n剩餘約 %2 分鐘 (Remaining: %2 minutes)").arg(modeText).arg(minutes));
+			? tr("Web filter: blocking blacklist sites (網絡管制：正在封鎖黑名單網站)")
+			: tr("Web filter: whitelist only (網絡管制：只允許白名單網站)");
+	setToolTip(tr("%1\nRemaining: %2 minutes (剩餘約 %2 分鐘)").arg(modeText).arg(minutes));
 }
 
 void WebFilterStatusOverlay::promptFailsafeUnlock()

@@ -92,6 +92,25 @@ private slots:
 		QCOMPARE(PersistentWebFilterState::mode(), WebFilterSession::Mode::Blacklist);
 	}
 
+	void emergencyUnlockBlocksSameSessionOnly()
+	{
+		const auto first = WebFilterSessionPolicy::create(
+					WebFilterSession::Mode::Blacklist, 30 * 60 * 1000, 1'000'000);
+		const auto second = WebFilterSessionPolicy::create(
+					WebFilterSession::Mode::Whitelist, 20 * 60 * 1000, 1'100'000);
+		QVERIFY(PersistentWebFilterState::noteEmergencyUnlocked(first.sessionId));
+		QVERIFY(PersistentWebFilterState::isEmergencyUnlocked(first.sessionId));
+		QVERIFY(PersistentWebFilterState::shouldIgnoreApply(first.sessionId));
+		QVERIFY(PersistentWebFilterState::shouldIgnoreApply(second.sessionId) == false);
+		QVERIFY(PersistentWebFilterState::shouldIgnoreApply({}) == false);
+		QVERIFY(PersistentWebFilterState::clearEmergencyUnlocked());
+		QVERIFY(PersistentWebFilterState::shouldIgnoreApply(first.sessionId) == false);
+		QVERIFY(PersistentWebFilterState::noteEmergencyUnlocked(first.sessionId));
+		QVERIFY(PersistentWebFilterState::clear());
+		QVERIFY(PersistentWebFilterState::shouldIgnoreApply(first.sessionId) == false);
+		QVERIFY(PersistentWebFilterState::emergencyUnlockedSession().isNull());
+	}
+
 private:
 	QString m_stateFile;
 };

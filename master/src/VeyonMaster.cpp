@@ -22,6 +22,8 @@
  *
  */
 
+#include <algorithm>
+
 #include <QHostAddress>
 #include <QMessageBox>
 
@@ -327,6 +329,17 @@ FeatureList VeyonMaster::featureList() const
 
 	addFeatures( []( const Feature& feature ) { return feature.testFlag( Feature::Flag::Mode ); } );
 	addFeatures( []( const Feature& feature ) { return feature.testFlag( Feature::Flag::Mode ) == false; } );
+
+	const auto emergencyName = QStringLiteral("EmergencyUnlockRecover");
+	const auto emergencyIt = std::find_if(features.begin(), features.end(), [&](const Feature& feature) {
+		return feature.name() == emergencyName;
+	});
+	if (emergencyIt != features.end())
+	{
+		const auto emergencyFeature = *emergencyIt;
+		features.erase(emergencyIt);
+		features.append(emergencyFeature);
+	}
 
 	return features;
 }

@@ -734,6 +734,13 @@ qint64 WebFilterEngine::configuredMaxTtlMs()
 bool WebFilterEngine::applyBlacklist(const QStringList& schoolBlocked, const QStringList& extraProxies,
 									bool restartBrowsers, const WebFilterSession& incomingSession)
 {
+	if (PersistentWebFilterState::shouldIgnoreApply(incomingSession.sessionId))
+	{
+		vInfo() << "ignoring teacher apply for emergency-unlocked session"
+				<< incomingSession.sessionId.toString(QUuid::WithoutBraces);
+		return true;
+	}
+	PersistentWebFilterState::clearEmergencyUnlocked();
 	const auto domains = WebFilterLists::effectiveBlacklist(schoolBlocked, extraProxies);
 	if (ensurePolicySnapshot() == false)
 	{
@@ -761,6 +768,13 @@ bool WebFilterEngine::applyBlacklist(const QStringList& schoolBlocked, const QSt
 bool WebFilterEngine::applyWhitelist(const QStringList& schoolAllowed, const QStringList& extraProxies,
 									bool restartBrowsers, const WebFilterSession& incomingSession)
 {
+	if (PersistentWebFilterState::shouldIgnoreApply(incomingSession.sessionId))
+	{
+		vInfo() << "ignoring teacher apply for emergency-unlocked session"
+				<< incomingSession.sessionId.toString(QUuid::WithoutBraces);
+		return true;
+	}
+	PersistentWebFilterState::clearEmergencyUnlocked();
 	const auto allowed = WebFilterLists::effectiveAllowlist(schoolAllowed, extraProxies);
 	if (ensurePolicySnapshot() == false)
 	{
@@ -814,7 +828,18 @@ bool WebFilterEngine::stopSession(const QUuid& sessionId,
 		vInfo() << "Restore already inactive session"
 				<< "session=" << sessionId.toString(QUuid::WithoutBraces)
 				<< "reason=" << WebFilterSessionPolicy::reasonName(reason);
-		return restore(restartBrowsers);
+		const auto unlockedId = current.sessionId.isNull() ? sessionId : current.sessionId;
+		const auto existingUnlocked = PersistentWebFilterState::emergencyUnlockedSession();
+		const auto restored = restore(restartBrowsers);
+		if (reason == WebFilterSession::StopReason::EmergencyUnlock)
+		{
+			const auto keep = unlockedId.isNull() == false ? unlockedId : existingUnlocked;
+			if (keep.isNull() == false)
+			{
+				PersistentWebFilterState::noteEmergencyUnlocked(keep);
+			}
+		}
+		return restored;
 	}
 
 	if (reason == WebFilterSession::StopReason::HardTTLExpired)
@@ -844,7 +869,13 @@ bool WebFilterEngine::stopSession(const QUuid& sessionId,
 				<< "reason=" << WebFilterSessionPolicy::reasonName(reason);
 	}
 
-	return restore(restartBrowsers);
+	const auto unlockedId = current.sessionId.isNull() ? sessionId : current.sessionId;
+	const auto restored = restore(restartBrowsers);
+	if (reason == WebFilterSession::StopReason::EmergencyUnlock && unlockedId.isNull() == false)
+	{
+		PersistentWebFilterState::noteEmergencyUnlocked(unlockedId);
+	}
+	return restored;
 }
 
 bool WebFilterEngine::reconcileOnServiceStart()
@@ -853,6 +884,12 @@ bool WebFilterEngine::reconcileOnServiceStart()
 	clearSystemPac();
 
 	const auto session = PersistentWebFilterState::session();
+	if (PersistentWebFilterState::shouldIgnoreApply(session.sessionId))
+	{
+		vInfo() << "not reapplying emergency-unlocked session after reboot"
+				<< session.sessionId.toString(QUuid::WithoutBraces);
+		return restore(false) && PersistentWebFilterState::noteEmergencyUnlocked(session.sessionId);
+	}
 	if (session.isActive() || PersistentWebFilterState::mode() != PersistentWebFilterState::Mode::Off)
 	{
 		QString reason;

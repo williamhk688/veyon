@@ -25,6 +25,7 @@ static const auto ModeKey = QStringLiteral("Mode");
 static const auto DomainsKey = QStringLiteral("Domains");
 static const auto SnapshotKey = QStringLiteral("PolicySnapshot");
 static const auto SessionKey = QStringLiteral("Session");
+static const auto EmergencyUnlockedKey = QStringLiteral("EmergencyUnlockedSession");
 static const auto StateFileEnvVar = QByteArrayLiteral("VEYON_WEBFILTER_STATE_FILE");
 
 #ifdef Q_OS_WIN
@@ -33,6 +34,7 @@ static constexpr wchar_t ModeValue[] = L"Mode";
 static constexpr wchar_t DomainsValue[] = L"Domains";
 static constexpr wchar_t SnapshotValue[] = L"PolicySnapshot";
 static constexpr wchar_t SessionValue[] = L"Session";
+static constexpr wchar_t EmergencyUnlockedValue[] = L"EmergencyUnlockedSession";
 #endif
 
 
@@ -410,10 +412,91 @@ bool PersistentWebFilterState::updateCheckpoint(qint64 elapsedMs, qint64 wallMs)
 }
 
 
+static QString readEmergencyUnlockedText()
+{
+	if (testStateFilePath().isEmpty() == false)
+	{
+		return testSettings()->value(EmergencyUnlockedKey).toString();
+	}
+
+#ifdef Q_OS_WIN
+	return readRegistryString(EmergencyUnlockedValue);
+#else
+	return {};
+#endif
+}
+
+
+static bool writeEmergencyUnlockedText(const QString& text)
+{
+	if (testStateFilePath().isEmpty() == false)
+	{
+		auto settings = testSettings();
+		if (text.isEmpty())
+		{
+			settings->remove(EmergencyUnlockedKey);
+		}
+		else
+		{
+			settings->setValue(EmergencyUnlockedKey, text);
+		}
+		settings->sync();
+		return settings->status() == QSettings::NoError;
+	}
+
+#ifdef Q_OS_WIN
+	return writeRegistryString(EmergencyUnlockedValue, text);
+#else
+	Q_UNUSED(text)
+	return false;
+#endif
+}
+
+
+bool PersistentWebFilterState::noteEmergencyUnlocked(const QUuid& sessionId)
+{
+	if (sessionId.isNull())
+	{
+		return false;
+	}
+	return writeEmergencyUnlockedText(sessionId.toString(QUuid::WithoutBraces));
+}
+
+
+QUuid PersistentWebFilterState::emergencyUnlockedSession()
+{
+	const QUuid id{readEmergencyUnlockedText()};
+	return id;
+}
+
+
+bool PersistentWebFilterState::isEmergencyUnlocked(const QUuid& sessionId)
+{
+	if (sessionId.isNull())
+	{
+		return false;
+	}
+	return emergencyUnlockedSession() == sessionId;
+}
+
+
+bool PersistentWebFilterState::shouldIgnoreApply(const QUuid& incomingSessionId)
+{
+	return isEmergencyUnlocked(incomingSessionId);
+}
+
+
+bool PersistentWebFilterState::clearEmergencyUnlocked()
+{
+	return writeEmergencyUnlockedText({});
+}
+
+
 bool PersistentWebFilterState::clear()
 {
 	if (writeDomains({}) == false || writeMode(Mode::Off) == false ||
-		writeSnapshot({}) == false || writeSessionText({}) == false)
+		writeSnapshot({}) == false || writeSessionText({}) == false ||
+		clearEmergencyUnlocked() == false)
 	{
 		return false;
 	}

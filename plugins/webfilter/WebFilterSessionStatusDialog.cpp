@@ -17,7 +17,7 @@
 WebFilterSessionStatusDialog::WebFilterSessionStatusDialog(QWidget* parent) :
 	QDialog(parent)
 {
-	setWindowTitle(tr("網絡限制進行中 (Web restriction active)"));
+	setWindowTitle(tr("Web restriction active (網絡限制進行中)"));
 	setModal(false);
 	setWindowFlag(Qt::WindowContextHelpButtonHint, false);
 
@@ -25,10 +25,10 @@ WebFilterSessionStatusDialog::WebFilterSessionStatusDialog(QWidget* parent) :
 	m_mode = new QLabel(this);
 	m_remaining = new QLabel(this);
 	m_endsAt = new QLabel(this);
-	auto* restore = new QPushButton(tr("恢復網絡 (Restore web)"), this);
-	layout->addRow(tr("模式 (Mode):"), m_mode);
-	layout->addRow(tr("剩餘時間 (Remaining):"), m_remaining);
-	layout->addRow(tr("結束於 (Ends at):"), m_endsAt);
+	auto* restore = new QPushButton(tr("Restore web (恢復網絡)"), this);
+	layout->addRow(tr("Mode (模式):"), m_mode);
+	layout->addRow(tr("Remaining (剩餘時間):"), m_remaining);
+	layout->addRow(tr("Ends at (結束於):"), m_endsAt);
 	layout->addRow(restore);
 	connect(restore, &QPushButton::clicked, this, &WebFilterSessionStatusDialog::restoreRequested);
 }
@@ -54,8 +54,8 @@ void WebFilterSessionStatusDialog::refresh()
 	const auto minutes = remaining / 60000;
 	const auto seconds = (remaining % 60000) / 1000;
 	m_mode->setText(m_session.mode == WebFilterSession::Mode::Whitelist
-					? tr("只允許白名單網站 (Allow whitelist sites only)")
-					: tr("封鎖黑名單網站 (Block blacklist sites)"));
+					? tr("Allow whitelist sites only (只允許白名單網站)")
+					: tr("Block blacklist sites (封鎖黑名單網站)"));
 	m_remaining->setText(QStringLiteral("%1:%2").arg(minutes, 2, 10, QLatin1Char('0'))
 						 .arg(seconds, 2, 10, QLatin1Char('0')));
 	m_endsAt->setText(QDateTime::fromMSecsSinceEpoch(m_session.expiresAtMs).toString(QStringLiteral("HH:mm")));

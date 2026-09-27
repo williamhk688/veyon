@@ -21,24 +21,24 @@ WebFilterDurationDialog::WebFilterDurationDialog(QWidget* parent, qint64 maxTtlM
 	QDialog(parent),
 	m_maxTtlMs(maxTtlMs > 0 ? maxTtlMs : WebFilterSessionPolicy::DefaultMaxTtlMs)
 {
-	setWindowTitle(tr("網絡限制時長 (Web restriction duration)"));
+	setWindowTitle(tr("Web restriction duration (網絡限制時長)"));
 	setModal(true);
 
 	auto* layout = new QFormLayout(this);
 	m_choice = new QComboBox(this);
-	m_choice->addItem(tr("10 分鐘 (10 minutes)"), int(Choice::Minutes10));
-	m_choice->addItem(tr("20 分鐘 (20 minutes)"), int(Choice::Minutes20));
-	m_choice->addItem(tr("30 分鐘 (30 minutes)"), int(Choice::Minutes30));
-	m_choice->addItem(tr("45 分鐘 (45 minutes)"), int(Choice::Minutes45));
-	m_choice->addItem(tr("60 分鐘 (60 minutes)"), int(Choice::Minutes60));
-	m_choice->addItem(tr("自訂時長 (Custom duration)"), int(Choice::CustomDuration));
-	m_choice->addItem(tr("自訂結束時間 (Custom end time)"), int(Choice::CustomEndTime));
+	m_choice->addItem(tr("10 minutes (10 分鐘)"), int(Choice::Minutes10));
+	m_choice->addItem(tr("20 minutes (20 分鐘)"), int(Choice::Minutes20));
+	m_choice->addItem(tr("30 minutes (30 分鐘)"), int(Choice::Minutes30));
+	m_choice->addItem(tr("45 minutes (45 分鐘)"), int(Choice::Minutes45));
+	m_choice->addItem(tr("60 minutes (60 分鐘)"), int(Choice::Minutes60));
+	m_choice->addItem(tr("Custom duration (自訂時長)"), int(Choice::CustomDuration));
+	m_choice->addItem(tr("Custom end time (自訂結束時間)"), int(Choice::CustomEndTime));
 	m_choice->setCurrentIndex(2);
 
 	m_customMinutes = new QSpinBox(this);
 	m_customMinutes->setRange(1, int(m_maxTtlMs / 60000));
 	m_customMinutes->setValue(30);
-	m_customMinutes->setSuffix(tr(" 分鐘 (min)"));
+	m_customMinutes->setSuffix(tr(" min (分鐘)"));
 
 	m_customEnd = new QDateTimeEdit(QDateTime::currentDateTime().addSecs(30 * 60), this);
 	m_customEnd->setDisplayFormat(QStringLiteral("HH:mm"));
@@ -46,10 +46,10 @@ WebFilterDurationDialog::WebFilterDurationDialog(QWidget* parent, qint64 maxTtlM
 
 	m_endsAt = new QLabel(this);
 
-	layout->addRow(tr("鎖定時長 (Duration):"), m_choice);
-	layout->addRow(tr("自訂分鐘 (Custom minutes):"), m_customMinutes);
-	layout->addRow(tr("自訂結束 (Custom end):"), m_customEnd);
-	layout->addRow(tr("結束於 (Ends at):"), m_endsAt);
+	layout->addRow(tr("Duration (鎖定時長):"), m_choice);
+	layout->addRow(tr("Custom minutes (自訂分鐘):"), m_customMinutes);
+	layout->addRow(tr("Custom end (自訂結束):"), m_customEnd);
+	layout->addRow(tr("Ends at (結束於):"), m_endsAt);
 
 	auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
 	layout->addRow(buttons);

@@ -27,6 +27,11 @@ public:
 	static bool setPolicySnapshot(const QString& snapshot);
 	static bool saveSession(const WebFilterSession& session);
 	static bool updateCheckpoint(qint64 elapsedMs, qint64 wallMs);
+	static bool noteEmergencyUnlocked(const QUuid& sessionId);
+	static QUuid emergencyUnlockedSession();
+	static bool isEmergencyUnlocked(const QUuid& sessionId);
+	static bool shouldIgnoreApply(const QUuid& incomingSessionId);
+	static bool clearEmergencyUnlocked();
 	static bool clear();
 
 private:
