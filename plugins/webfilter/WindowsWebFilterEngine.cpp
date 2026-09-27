@@ -883,12 +883,20 @@ bool WebFilterEngine::reconcileOnServiceStart()
 	ensureClassroomFirewall();
 	clearSystemPac();
 
-	const auto session = PersistentWebFilterState::session();
-	if (PersistentWebFilterState::shouldIgnoreApply(session.sessionId))
+	const auto loaded = PersistentWebFilterState::session();
+	if (PersistentWebFilterState::shouldIgnoreApply(loaded.sessionId))
 	{
 		vInfo() << "not reapplying emergency-unlocked session after reboot"
-				<< session.sessionId.toString(QUuid::WithoutBraces);
-		return restore(false) && PersistentWebFilterState::noteEmergencyUnlocked(session.sessionId);
+				<< loaded.sessionId.toString(QUuid::WithoutBraces);
+		return restore(false) && PersistentWebFilterState::noteEmergencyUnlocked(loaded.sessionId);
+	}
+	QString reconstructReason;
+	const auto session = WebFilterSessionPolicy::recoverForReboot(
+				loaded, QDateTime::currentMSecsSinceEpoch(), configuredMaxTtlMs(), &reconstructReason);
+	if (reconstructReason.contains(QLatin1String("reconstructed")))
+	{
+		vWarning() << "persisted web-filter session JSON missing; reconstructing from mode"
+				   << reconstructReason;
 	}
 	if (session.isActive() || PersistentWebFilterState::mode() != PersistentWebFilterState::Mode::Off)
 	{

@@ -69,5 +69,6 @@ public:
 	static bool clearPersistedInputLocks();
 
 	static bool noteEmergencyUnlockSucceeded();
+	static bool isEmergencyUnlockPending();
 	static bool consumeEmergencyUnlockSucceeded();
 };

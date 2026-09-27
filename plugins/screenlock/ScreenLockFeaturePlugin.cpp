@@ -211,7 +211,7 @@ bool ScreenLockFeaturePlugin::handleFeatureMessage( VeyonWorkerInterface& worker
 						m_lockWidget = nullptr;
 					}
 					VeyonCore::platform().coreFunctions().restoreScreenSaverSettings();
-					QTimer::singleShot(0, []() { QCoreApplication::quit(); });
+					QTimer::singleShot(300, []() { QCoreApplication::quit(); });
 				}, Qt::QueuedConnection);
 			}
 			return true;

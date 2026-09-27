@@ -231,6 +231,23 @@ private slots:
 		QVERIFY(reason.contains(QLatin1String("version")));
 	}
 
+	void missingSessionJsonReconstructsInsteadOfFailOpen()
+	{
+		WebFilterSession loaded;
+		loaded.mode = WebFilterSession::Mode::Blacklist;
+		loaded.domains = {QStringLiteral("8ballpool.com")};
+		QString reason;
+		QCOMPARE(WebFilterSessionPolicy::recoveryAction(loaded, 1'000'000, {}, &reason),
+				 WebFilterSessionPolicy::RecoveryAction::FailOpen);
+		const auto recovered = WebFilterSessionPolicy::recoverForReboot(
+					loaded, 1'000'000, WebFilterSessionPolicy::DefaultMaxTtlMs, &reason);
+		QVERIFY(recovered.isActive());
+		QCOMPARE(recovered.mode, WebFilterSession::Mode::Blacklist);
+		QVERIFY(recovered.sessionId.isNull() == false);
+		QCOMPARE(WebFilterSessionPolicy::recoveryAction(recovered, 1'000'000, {}, &reason),
+				 WebFilterSessionPolicy::RecoveryAction::Reapply);
+	}
+
 	void blacklistSettingsSurviveExpiry()
 	{
 		const auto blocked = WebFilterLists::toJson({QStringLiteral("8ballpool.com")});

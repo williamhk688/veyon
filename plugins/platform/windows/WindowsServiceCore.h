@@ -73,6 +73,7 @@ private:
 	HANDLE m_serverShutdownEvent{nullptr};
 	HKEY m_screenLockKey{nullptr};
 	HANDLE m_screenLockNotifyEvent{nullptr};
+	HANDLE m_inputReleaseEvent{nullptr};
 	bool m_persistedInputLockApplied{false};
 	QAtomicInt m_serviceStopRequested{0};
 	QAtomicInt m_sessionChanged{0};

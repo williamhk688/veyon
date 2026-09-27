@@ -12,6 +12,8 @@
 
 #include "FailsafePasswordState.h"
 #include "PersistentWebFilterState.h"
+#include "PlatformInputDeviceFunctions.h"
+#include "PlatformPluginInterface.h"
 #include "VeyonCore.h"
 #include "WebFilterEngine.h"
 #include "WebFilterSessionPolicy.h"
@@ -61,6 +63,8 @@ void WebFilterSessionWatchdog::tick()
 {
 	if (FailsafePasswordState::consumeEmergencyUnlockSucceeded())
 	{
+		FailsafePasswordState::clearPersistedInputLocks();
+		VeyonCore::platform().inputDeviceFunctions().enableInputDevices();
 		const auto session = PersistentWebFilterState::session();
 		if (session.isActive())
 		{

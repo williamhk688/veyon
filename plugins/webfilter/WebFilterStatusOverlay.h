@@ -20,10 +20,12 @@ class WebFilterStatusOverlay : public QWidget
 	Q_OBJECT
 public:
 	explicit WebFilterStatusOverlay(QWidget* parent = nullptr);
+	~WebFilterStatusOverlay() override;
 
 	void syncFromState();
 	void setMode(PersistentWebFilterState::Mode mode);
 	void setRemainingMs(qint64 remainingMs, qint64 expiresAtMs);
+	void promptFailsafeUnlock();
 
 Q_SIGNALS:
 	void failsafeUnlocked();
@@ -31,15 +33,23 @@ Q_SIGNALS:
 protected:
 	void paintEvent(QPaintEvent* event) override;
 	void showEvent(QShowEvent* event) override;
+	bool nativeEvent(const QByteArray& eventType, void* message, qintptr* result) override;
 
 private:
 	void reposition();
-	void promptFailsafeUnlock();
 	void refreshTooltip();
+	void registerUnlockHotkey();
+	void unregisterUnlockHotkey();
+	void installKeyboardHook();
+	void removeKeyboardHook();
 
 	PersistentWebFilterState::Mode m_mode = PersistentWebFilterState::Mode::Off;
 	qint64 m_remainingMs = 0;
 	qint64 m_expiresAtMs = 0;
 	QElapsedTimer m_elapsed;
 	bool m_failsafePromptOpen = false;
+	bool m_hotkeyRegistered = false;
+#ifdef Q_OS_WIN
+	void* m_keyboardHook = nullptr;
+#endif
 };

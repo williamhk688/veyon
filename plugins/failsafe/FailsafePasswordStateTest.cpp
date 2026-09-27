@@ -121,8 +121,11 @@ private slots:
 	void emergencyUnlockFlagIsConsumedOnce()
 	{
 		QVERIFY(FailsafePasswordState::consumeEmergencyUnlockSucceeded() == false);
+		QVERIFY(FailsafePasswordState::isEmergencyUnlockPending() == false);
 		QVERIFY(FailsafePasswordState::noteEmergencyUnlockSucceeded());
+		QVERIFY(FailsafePasswordState::isEmergencyUnlockPending());
 		QVERIFY(FailsafePasswordState::consumeEmergencyUnlockSucceeded());
+		QVERIFY(FailsafePasswordState::isEmergencyUnlockPending() == false);
 		QVERIFY(FailsafePasswordState::consumeEmergencyUnlockSucceeded() == false);
 	}
 

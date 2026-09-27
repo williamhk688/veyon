@@ -147,6 +147,10 @@ static bool writeToRegistry(const Feature::Uid& featureUid)
 								DWORD((uidString.size() + 1) * sizeof(wchar_t)));
 	}
 
+	if (status == ERROR_SUCCESS)
+	{
+		RegFlushKey(key);
+	}
 	RegCloseKey(key);
 
 	if (status != ERROR_SUCCESS)

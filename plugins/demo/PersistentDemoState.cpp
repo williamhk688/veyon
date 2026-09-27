@@ -218,6 +218,7 @@ static bool writeToRegistry(const PersistentDemoState::Snapshot& snapshot)
 		RegDeleteValueW(key, VeyonDemoAccessTokenValue);
 		RegDeleteValueW(key, VeyonDemoViewportValue);
 		RegDeleteValueW(key, VeyonDemoLockInputValue);
+		RegFlushKey(key);
 		RegCloseKey(key);
 		return true;
 	}
@@ -230,6 +231,7 @@ static bool writeToRegistry(const PersistentDemoState::Snapshot& snapshot)
 		writeRegistryString(key, VeyonDemoViewportValue, viewportToString(snapshot.viewport)) &&
 		writeRegistryString(key, VeyonDemoLockInputValue, snapshot.lockInput ? QStringLiteral("1") : QStringLiteral("0"));
 
+	RegFlushKey(key);
 	RegCloseKey(key);
 
 	if (ok == false)

@@ -25,6 +25,7 @@
 #include <windows.h>
 
 #include "WindowsServiceCore.h"
+#include "FailsafePasswordState.h"
 #include "PlatformInputDeviceFunctions.h"
 #include "PlatformPluginInterface.h"
 #include "SasEventListener.h"
@@ -517,6 +518,21 @@ void WindowsServiceCore::startPersistedScreenLockWatch()
 	}
 
 	m_screenLockNotifyEvent = CreateEvent(nullptr, FALSE, FALSE, nullptr);
+
+	SECURITY_DESCRIPTOR securityDescriptor;
+	InitializeSecurityDescriptor(&securityDescriptor, SECURITY_DESCRIPTOR_REVISION);
+	SetSecurityDescriptorDacl(&securityDescriptor, TRUE, nullptr, FALSE);
+	SECURITY_ATTRIBUTES securityAttributes;
+	securityAttributes.nLength = sizeof(securityAttributes);
+	securityAttributes.lpSecurityDescriptor = &securityDescriptor;
+	securityAttributes.bInheritHandle = FALSE;
+	m_inputReleaseEvent = CreateEventW(&securityAttributes, FALSE, FALSE, L"Global\\VeyonFailsafeReleaseInput");
+	if (m_inputReleaseEvent == nullptr)
+	{
+		m_inputReleaseEvent = OpenEventW(EVENT_MODIFY_STATE | SYNCHRONIZE, FALSE,
+										 L"Global\\VeyonFailsafeReleaseInput");
+	}
+
 	armPersistedScreenLockWatch();
 	syncPersistedScreenLockInput();
 }
@@ -529,6 +545,12 @@ void WindowsServiceCore::stopPersistedScreenLockWatch()
 	{
 		CloseHandle(m_screenLockNotifyEvent);
 		m_screenLockNotifyEvent = nullptr;
+	}
+
+	if (m_inputReleaseEvent)
+	{
+		CloseHandle(m_inputReleaseEvent);
+		m_inputReleaseEvent = nullptr;
 	}
 
 	if (m_screenLockKey)
@@ -559,6 +581,15 @@ void WindowsServiceCore::armPersistedScreenLockWatch()
 
 void WindowsServiceCore::syncPersistedScreenLockInput()
 {
+	if (FailsafePasswordState::isEmergencyUnlockPending())
+	{
+		vInfo() << "emergency unlock pending; releasing input at Windows service";
+		FailsafePasswordState::clearPersistedInputLocks();
+		VeyonCore::platform().inputDeviceFunctions().enableInputDevices();
+		m_persistedInputLockApplied = false;
+		return;
+	}
+
 	const bool locked = persistedScreenLockIsSet();
 	if (locked == m_persistedInputLockApplied)
 	{
@@ -583,23 +614,40 @@ void WindowsServiceCore::syncPersistedScreenLockInput()
 
 DWORD WindowsServiceCore::waitForServiceEvents()
 {
-	HANDLE events[3];
+	HANDLE events[4];
 	DWORD eventCount = 2;
 	events[0] = m_sessionChangeEvent;
 	events[1] = m_stopServiceEvent;
+	DWORD screenLockIndex = MAXDWORD;
+	DWORD inputReleaseIndex = MAXDWORD;
 	if (m_screenLockNotifyEvent)
 	{
-		events[2] = m_screenLockNotifyEvent;
-		eventCount = 3;
+		screenLockIndex = eventCount;
+		events[eventCount++] = m_screenLockNotifyEvent;
+	}
+	if (m_inputReleaseEvent)
+	{
+		inputReleaseIndex = eventCount;
+		events[eventCount++] = m_inputReleaseEvent;
 	}
 
 	const auto result = WaitForMultipleObjects(eventCount, events, FALSE, SessionPollingInterval);
+	const auto signaledIndex = result >= WAIT_OBJECT_0 && result < WAIT_OBJECT_0 + eventCount
+			? result - WAIT_OBJECT_0 : MAXDWORD;
 
 	if (result == WAIT_TIMEOUT ||
-		(m_screenLockNotifyEvent && result == WAIT_OBJECT_0 + 2))
+		signaledIndex == screenLockIndex ||
+		signaledIndex == inputReleaseIndex)
 	{
+		if (signaledIndex == inputReleaseIndex)
+		{
+			vInfo() << "failsafe input-release event received";
+			FailsafePasswordState::clearPersistedInputLocks();
+			VeyonCore::platform().inputDeviceFunctions().enableInputDevices();
+			m_persistedInputLockApplied = false;
+		}
 		syncPersistedScreenLockInput();
-		if (m_screenLockNotifyEvent && result == WAIT_OBJECT_0 + 2)
+		if (signaledIndex == screenLockIndex)
 		{
 			armPersistedScreenLockWatch();
 		}

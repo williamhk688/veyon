@@ -58,6 +58,10 @@ public:
 										 qint64 nowWallMs,
 										 qint64 maxTtlMs = DefaultMaxTtlMs,
 										 QString* reason = nullptr);
+	static WebFilterSession recoverForReboot(const WebFilterSession& loaded,
+											 qint64 nowWallMs,
+											 qint64 maxTtlMs = DefaultMaxTtlMs,
+											 QString* reason = nullptr);
 	static qint64 recoveredElapsedMs(const WebFilterSession& session,
 									 qint64 nowWallMs,
 									 qint64 maxTtlMs = DefaultMaxTtlMs);

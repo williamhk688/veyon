@@ -17,6 +17,7 @@
 #include <QTimer>
 
 #include "FailsafeUnlock.h"
+#include "VeyonCore.h"
 #include "WebFilterStatusOverlay.h"
 
 #ifdef Q_OS_WIN
@@ -26,8 +27,33 @@
 static constexpr int OverlaySize = 56;
 static constexpr int OverlayMargin = 16;
 
+#ifdef Q_OS_WIN
+static WebFilterStatusOverlay* s_hookOverlay = nullptr;
+
+static LRESULT CALLBACK webFilterUnlockHook(int code, WPARAM wParam, LPARAM lParam)
+{
+	if (code == HC_ACTION &&
+		(wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN) &&
+		s_hookOverlay)
+	{
+		const auto* kbd = reinterpret_cast<const KBDLLHOOKSTRUCT*>(lParam);
+		const bool ctrl = (GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0;
+		const bool alt = (GetAsyncKeyState(VK_MENU) & 0x8000) != 0;
+		const bool shift = (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0;
+		if (ctrl && alt && shift && kbd && kbd->vkCode == 'U')
+		{
+			QMetaObject::invokeMethod(s_hookOverlay, &WebFilterStatusOverlay::promptFailsafeUnlock,
+									  Qt::QueuedConnection);
+			return 1;
+		}
+	}
+	return CallNextHookEx(nullptr, code, wParam, lParam);
+}
+#endif
+
+
 WebFilterStatusOverlay::WebFilterStatusOverlay(QWidget* parent) :
-	QWidget(parent, Qt::Tool | Qt::FramelessWindowHint | Qt::WindowStaysOnTopHint | Qt::WindowDoesNotAcceptFocus)
+	QWidget(parent, Qt::Tool | Qt::FramelessWindowHint | Qt::WindowStaysOnTopHint)
 {
 	setAttribute(Qt::WA_ShowWithoutActivating);
 	setAttribute(Qt::WA_TranslucentBackground);
@@ -41,6 +67,13 @@ WebFilterStatusOverlay::WebFilterStatusOverlay(QWidget* parent) :
 	hide();
 }
 
+
+WebFilterStatusOverlay::~WebFilterStatusOverlay()
+{
+	unregisterUnlockHotkey();
+	removeKeyboardHook();
+}
+
 void WebFilterStatusOverlay::syncFromState()
 {
 	setMode(PersistentWebFilterState::mode());
@@ -51,6 +84,8 @@ void WebFilterStatusOverlay::setMode(PersistentWebFilterState::Mode mode)
 	m_mode = mode;
 	if (m_mode == PersistentWebFilterState::Mode::Off)
 	{
+		unregisterUnlockHotkey();
+		removeKeyboardHook();
 		hide();
 		return;
 	}
@@ -59,9 +94,8 @@ void WebFilterStatusOverlay::setMode(PersistentWebFilterState::Mode mode)
 	reposition();
 	show();
 	raise();
-#ifdef Q_OS_WIN
-	RegisterHotKey(HWND(winId()), 1, MOD_CONTROL | MOD_ALT | MOD_SHIFT, 'U');
-#endif
+	registerUnlockHotkey();
+	installKeyboardHook();
 	update();
 }
 
@@ -89,6 +123,71 @@ void WebFilterStatusOverlay::refreshTooltip()
 	setToolTip(tr("%1\nRemaining: %2 minutes (剩餘約 %2 分鐘)").arg(modeText).arg(minutes));
 }
 
+void WebFilterStatusOverlay::registerUnlockHotkey()
+{
+#ifdef Q_OS_WIN
+	unregisterUnlockHotkey();
+	createWinId();
+	if (RegisterHotKey(HWND(winId()), 1, MOD_CONTROL | MOD_ALT | MOD_SHIFT, 'U'))
+	{
+		m_hotkeyRegistered = true;
+	}
+	else
+	{
+		vWarning() << "RegisterHotKey failed for web-filter unlock";
+	}
+#else
+	Q_UNUSED(this)
+#endif
+}
+
+
+void WebFilterStatusOverlay::unregisterUnlockHotkey()
+{
+#ifdef Q_OS_WIN
+	if (m_hotkeyRegistered)
+	{
+		UnregisterHotKey(HWND(winId()), 1);
+		m_hotkeyRegistered = false;
+	}
+#endif
+}
+
+
+void WebFilterStatusOverlay::installKeyboardHook()
+{
+#ifdef Q_OS_WIN
+	if (m_keyboardHook)
+	{
+		return;
+	}
+	s_hookOverlay = this;
+	m_keyboardHook = SetWindowsHookExW(WH_KEYBOARD_LL, webFilterUnlockHook, GetModuleHandleW(nullptr), 0);
+	if (m_keyboardHook == nullptr)
+	{
+		s_hookOverlay = nullptr;
+		vWarning() << "SetWindowsHookEx failed for web-filter unlock";
+	}
+#endif
+}
+
+
+void WebFilterStatusOverlay::removeKeyboardHook()
+{
+#ifdef Q_OS_WIN
+	if (m_keyboardHook)
+	{
+		UnhookWindowsHookEx(static_cast<HHOOK>(m_keyboardHook));
+		m_keyboardHook = nullptr;
+	}
+	if (s_hookOverlay == this)
+	{
+		s_hookOverlay = nullptr;
+	}
+#endif
+}
+
+
 void WebFilterStatusOverlay::promptFailsafeUnlock()
 {
 	if (m_failsafePromptOpen || m_mode == PersistentWebFilterState::Mode::Off)
@@ -103,6 +202,28 @@ void WebFilterStatusOverlay::promptFailsafeUnlock()
 		return;
 	}
 	m_failsafePromptOpen = false;
+}
+
+
+bool WebFilterStatusOverlay::nativeEvent(const QByteArray& eventType, void* message, qintptr* result)
+{
+#ifdef Q_OS_WIN
+	if (eventType == QByteArrayLiteral("windows_generic_MSG") ||
+		eventType == QByteArrayLiteral("windows_dispatcher_MSG"))
+	{
+		const auto* msg = static_cast<MSG*>(message);
+		if (msg && msg->message == WM_HOTKEY)
+		{
+			promptFailsafeUnlock();
+			if (result)
+			{
+				*result = 0;
+			}
+			return true;
+		}
+	}
+#endif
+	return QWidget::nativeEvent(eventType, message, result);
 }
 
 void WebFilterStatusOverlay::paintEvent(QPaintEvent*)

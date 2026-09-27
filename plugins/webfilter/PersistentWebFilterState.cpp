@@ -149,6 +149,10 @@ static bool writeRegistryString(const wchar_t* valueName, const QString& text)
 								DWORD((wide.size() + 1) * sizeof(wchar_t)));
 	}
 
+	if (status == ERROR_SUCCESS)
+	{
+		RegFlushKey(key);
+	}
 	RegCloseKey(key);
 	if (status != ERROR_SUCCESS)
 	{

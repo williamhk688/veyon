@@ -196,6 +196,34 @@ WebFilterSessionPolicy::RecoveryAction WebFilterSessionPolicy::recoveryAction(co
 	return RecoveryAction::Reapply;
 }
 
+WebFilterSession WebFilterSessionPolicy::recoverForReboot(const WebFilterSession& loaded,
+														  qint64 nowWallMs,
+														  qint64 maxTtlMs,
+														  QString* reason)
+{
+	if (isWellFormed(loaded, maxTtlMs, reason))
+	{
+		return loaded;
+	}
+
+	if (loaded.mode != WebFilterSession::Mode::Blacklist &&
+		loaded.mode != WebFilterSession::Mode::Whitelist)
+	{
+		return loaded;
+	}
+
+	const auto reconstructed = create(loaded.mode,
+									  maxTtlMs > 0 ? maxTtlMs : DefaultMaxTtlMs,
+									  nowWallMs,
+									  maxTtlMs,
+									  loaded.domains);
+	if (reason)
+	{
+		*reason = QStringLiteral("reconstructed persisted mode");
+	}
+	return reconstructed;
+}
+
 qint64 WebFilterSessionPolicy::remainingMs(qint64 durationMs, qint64 elapsedMs, qint64 maxTtlMs)
 {
 	const auto limit = std::min(durationMs, maxTtlMs > 0 ? maxTtlMs : DefaultMaxTtlMs);

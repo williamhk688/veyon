@@ -430,6 +430,12 @@ bool FailsafePasswordState::noteEmergencyUnlockSucceeded()
 }
 
 
+bool FailsafePasswordState::isEmergencyUnlockPending()
+{
+	return readEmergencyUnlockFlag();
+}
+
+
 bool FailsafePasswordState::consumeEmergencyUnlockSucceeded()
 {
 	if (readEmergencyUnlockFlag() == false)

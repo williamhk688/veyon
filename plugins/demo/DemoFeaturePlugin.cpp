@@ -493,7 +493,7 @@ bool DemoFeaturePlugin::handleFeatureMessage( VeyonWorkerInterface& worker, cons
 						m_demoClient->deleteLater();
 						m_demoClient = nullptr;
 					}
-					QTimer::singleShot(0, []() { QCoreApplication::quit(); });
+					QTimer::singleShot(300, []() { QCoreApplication::quit(); });
 				}, Qt::QueuedConnection);
 			}
 			return true;

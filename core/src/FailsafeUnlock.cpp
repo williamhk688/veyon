@@ -53,6 +53,7 @@ static QMutex& monitorMutex()
 #ifdef Q_OS_WIN
 static constexpr auto HotkeyEventName = L"Global\\VeyonFailsafeHotkey";
 static constexpr auto PassthroughEventName = L"Global\\VeyonFailsafePasswordDialogActive";
+static constexpr auto InputReleaseEventName = L"Global\\VeyonFailsafeReleaseInput";
 
 
 static HANDLE createGlobalEvent(const wchar_t* name, bool manualReset)
@@ -84,6 +85,7 @@ FailsafeHotkeyMonitor::FailsafeHotkeyMonitor() :
 #ifdef Q_OS_WIN
 	m_hotkeyEvent = createGlobalEvent(HotkeyEventName, false);
 	m_passthroughEvent = createGlobalEvent(PassthroughEventName, true);
+	m_inputReleaseEvent = createGlobalEvent(InputReleaseEventName, false);
 
 	if (m_hotkeyEvent)
 	{
@@ -137,6 +139,29 @@ void FailsafeHotkeyMonitor::notifyHotkeyPressed()
 		}
 #endif
 	}, Qt::QueuedConnection);
+}
+
+
+
+void FailsafeHotkeyMonitor::notifyInputReleaseRequested()
+{
+#ifdef Q_OS_WIN
+	if (m_inputReleaseEvent)
+	{
+		SetEvent(static_cast<HANDLE>(m_inputReleaseEvent));
+	}
+#endif
+}
+
+
+
+void* FailsafeHotkeyMonitor::inputReleaseEventHandle() const
+{
+#ifdef Q_OS_WIN
+	return m_inputReleaseEvent;
+#else
+	return nullptr;
+#endif
 }
 
 
@@ -241,6 +266,7 @@ bool FailsafeUnlock::prompt(QWidget* parent)
 	failureCount = 0;
 	FailsafePasswordState::clearPersistedInputLocks();
 	FailsafePasswordState::noteEmergencyUnlockSucceeded();
+	FailsafeHotkeyMonitor::instance().notifyInputReleaseRequested();
 	FailsafeHotkeyMonitor::instance().setPasswordPromptActive(false);
 	dialogOpen = false;
 	vInfo() << "Emergency unlock successful";
