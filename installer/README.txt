@@ -36,9 +36,10 @@ under %ProgramData%\Veyon\classroom-persist so a reboot keeps the
 restriction until the teacher restores it or the session expires.
 
 Unplugging student Wi-Fi does not unlock the session. While the
-PC is on, the countdown uses powered-on time. After shutdown or
-reboot, recovery adds the wall-clock gap, so a one-minute session
-that stayed off longer than one minute unlocks on boot.
+PC is on, the countdown uses powered-on time and ignores system
+clock changes. After a real reboot, recovery adds the wall-clock
+gap so shutdown time still counts. Changing the clock without
+admin rights is normally blocked on student accounts.
 
 Install this package on both the teacher PC and every student PC,
 then restart Veyon Service.
@@ -47,8 +48,8 @@ Direct download:
 
   https://github.com/williamhk688/veyon/raw/feature/web-filter-session/installer/veyon_4_11_2_win64_modified_setup.exe
 
-Source: 176f92d6
+Source: ec4f3166
 Branch: feature/web-filter-session
 
 SHA-256:
-  93040cfae23a041432406b5df32c2ba348793c456d2b6db164691a60d8d5e056
+  cbb52a941c9e13bfa5d626e0b2fe4e3cddbde4c37d34181a2d34c48ef6d03e71
