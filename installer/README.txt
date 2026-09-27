@@ -22,8 +22,8 @@ Direct download:
 
   https://github.com/williamhk688/veyon/raw/cursor/classroom-web-filter-ecca/installer/veyon_4_11_2_win64_modified_setup.exe
 
-Source: cf37de4a
+Source: 220ae180
 Branch: cursor/classroom-web-filter-ecca
 
 SHA-256:
-  0946a1e30523329c6baeb96ac144c21df994782f0c8bfccc7935fa30e132a61f
+  1e64e38b3840519c946581140392c6965e90653ffd2857a24a9eb45287dc75ea
