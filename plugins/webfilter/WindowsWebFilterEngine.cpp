@@ -19,6 +19,8 @@
 #include <QJsonObject>
 #include <QThread>
 
+#include <algorithm>
+
 #include "Filesystem.h"
 #include "PersistentWebFilterState.h"
 #include "VeyonConfiguration.h"

@@ -8,7 +8,7 @@
 
 #include <algorithm>
 
-#ifdef Q_OS_WIN
+#ifdef _WIN32
 #include <windows.h>
 #endif
 
@@ -167,7 +167,7 @@ qint64 WebFilterSessionPolicy::recoveredElapsedMs(const WebFilterSession& sessio
 
 qint64 WebFilterSessionPolicy::currentUptimeMs()
 {
-#ifdef Q_OS_WIN
+#ifdef _WIN32
 	return qint64(GetTickCount64());
 #else
 	return 0;
