@@ -118,6 +118,14 @@ private slots:
 		QVERIFY(QFile::exists(m_demoFile) == false);
 	}
 
+	void emergencyUnlockFlagIsConsumedOnce()
+	{
+		QVERIFY(FailsafePasswordState::consumeEmergencyUnlockSucceeded() == false);
+		QVERIFY(FailsafePasswordState::noteEmergencyUnlockSucceeded());
+		QVERIFY(FailsafePasswordState::consumeEmergencyUnlockSucceeded());
+		QVERIFY(FailsafePasswordState::consumeEmergencyUnlockSucceeded() == false);
+	}
+
 private:
 	QString m_passwordFile;
 	QString m_lockFile;
