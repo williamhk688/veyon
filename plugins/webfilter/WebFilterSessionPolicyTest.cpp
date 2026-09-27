@@ -248,6 +248,29 @@ private slots:
 				 WebFilterSessionPolicy::RecoveryAction::Reapply);
 	}
 
+	void rebootKeepsOriginalWindowAndCountsDowntime()
+	{
+		WebFilterSession loaded;
+		loaded.mode = WebFilterSession::Mode::Whitelist;
+		loaded.startTimeMs = 1'000'000;
+		loaded.durationMs = 60 * 1000;
+		loaded.expiresAtMs = loaded.startTimeMs + loaded.durationMs;
+		loaded.domains = {QStringLiteral("classroom.google.com")};
+		QString reason;
+		const auto recovered = WebFilterSessionPolicy::recoverForReboot(
+					loaded, loaded.startTimeMs + 10 * 1000, WebFilterSessionPolicy::DefaultMaxTtlMs, &reason);
+		QVERIFY(recovered.isActive());
+		QCOMPARE(recovered.startTimeMs, loaded.startTimeMs);
+		QCOMPARE(recovered.durationMs, loaded.durationMs);
+		QVERIFY(reason.contains(QLatin1String("repaired")));
+		QCOMPARE(WebFilterSessionPolicy::recoveryAction(
+					 recovered, loaded.startTimeMs + 30 * 1000, {}, &reason),
+				 WebFilterSessionPolicy::RecoveryAction::Reapply);
+		QCOMPARE(WebFilterSessionPolicy::recoveryAction(
+					 recovered, loaded.startTimeMs + 2 * 60 * 1000, {}, &reason),
+				 WebFilterSessionPolicy::RecoveryAction::Expire);
+	}
+
 	void blacklistSettingsSurviveExpiry()
 	{
 		const auto blocked = WebFilterLists::toJson({QStringLiteral("8ballpool.com")});

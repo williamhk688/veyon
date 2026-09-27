@@ -41,6 +41,12 @@ void WebFilterSessionWatchdog::track(const WebFilterSession& session)
 {
 	if (session.sessionId == m_trackedSessionId)
 	{
+		const auto current = m_baseElapsedMs + m_elapsed.elapsed();
+		if (session.checkpointElapsedMs > current)
+		{
+			m_baseElapsedMs = session.checkpointElapsedMs;
+			m_elapsed.restart();
+		}
 		return;
 	}
 
@@ -89,13 +95,21 @@ bool WebFilterSessionWatchdog::poll()
 
 	track(session);
 
+	const auto maxTtlMs = WebFilterEngine::configuredMaxTtlMs();
+	if (WebFilterSessionPolicy::recoveryAction(session, QDateTime::currentMSecsSinceEpoch(), maxTtlMs)
+		== WebFilterSessionPolicy::RecoveryAction::Expire)
+	{
+		stopCurrent(WebFilterSession::StopReason::RecoveryExpired);
+		return true;
+	}
+
 	const auto elapsed = m_baseElapsedMs + m_elapsed.elapsed();
 	if (WebFilterSessionPolicy::shouldFireTimer(m_trackedSessionId, PersistentWebFilterState::session().sessionId) == false)
 	{
 		return false;
 	}
 
-	const auto action = WebFilterSessionPolicy::liveAction(session, elapsed, WebFilterEngine::configuredMaxTtlMs());
+	const auto action = WebFilterSessionPolicy::liveAction(session, elapsed, maxTtlMs);
 	if (action == WebFilterSessionPolicy::LiveAction::ExpireHardTtl)
 	{
 		stopCurrent(WebFilterSession::StopReason::HardTTLExpired);

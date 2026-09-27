@@ -212,6 +212,33 @@ WebFilterSession WebFilterSessionPolicy::recoverForReboot(const WebFilterSession
 		return loaded;
 	}
 
+	if (loaded.startTimeMs > 0 && loaded.durationMs > 0)
+	{
+		auto repaired = loaded;
+		if (repaired.sessionId.isNull())
+		{
+			repaired.sessionId = QUuid::createUuid();
+		}
+		if (repaired.version != CurrentVersion)
+		{
+			repaired.version = CurrentVersion;
+		}
+		if (repaired.expiresAtMs <= repaired.startTimeMs)
+		{
+			repaired.expiresAtMs = repaired.startTimeMs + repaired.durationMs;
+		}
+		const auto maxMs = maxTtlMs > 0 ? maxTtlMs : DefaultMaxTtlMs;
+		if (repaired.hardExpiresAtMs <= repaired.startTimeMs)
+		{
+			repaired.hardExpiresAtMs = repaired.startTimeMs + maxMs;
+		}
+		if (reason)
+		{
+			*reason = QStringLiteral("repaired persisted timestamps");
+		}
+		return repaired;
+	}
+
 	const auto reconstructed = create(loaded.mode,
 									  maxTtlMs > 0 ? maxTtlMs : DefaultMaxTtlMs,
 									  nowWallMs,
